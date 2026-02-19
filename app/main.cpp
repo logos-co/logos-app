@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
     pluginExtension = ".so";
 #endif
 
-    QString pluginPath = modulesDir + "/package_manager_plugin" + pluginExtension;
+    QString pluginPath = modulesDir + "/package_manager_plugin/package_manager_plugin" + pluginExtension;
     logos_core_process_plugin(pluginPath.toUtf8().constData());
     bool loaded = logos_core_load_plugin("package_manager");
 

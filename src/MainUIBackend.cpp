@@ -18,13 +18,11 @@
 #include <QIcon>
 #include <QStandardPaths>
 #include <QFileDialog>
-#include <QTemporaryDir>
 #include "LogosQmlBridge.h"
 #include "logos_sdk.h"
 #include "token_manager.h"
 #include "restricted/DenyAllNAMFactory.h"
 #include "restricted/RestrictedUrlInterceptor.h"
-#include "lgx.h"
 
 extern "C" {
     char* logos_core_get_module_stats();
@@ -474,35 +472,44 @@ void MainUIBackend::refreshCoreModules()
 {
     QString libExtension;
 #if defined(Q_OS_MAC)
-    libExtension = "*.dylib";
+    libExtension = ".dylib";
 #elif defined(Q_OS_WIN)
-    libExtension = "*.dll";
+    libExtension = ".dll";
 #else
-    libExtension = "*.so";
+    libExtension = ".so";
 #endif
-    
-    QDir modulesDir(modulesDirectory());
-    if (modulesDir.exists()) {
-        QStringList entries = modulesDir.entryList(QStringList() << libExtension, QDir::Files);
-        for (const QString& entry : entries) {
-            QString fullPath = modulesDir.absoluteFilePath(entry);
-            logos_core_process_plugin(fullPath.toUtf8().constData());
+
+    auto scanModulesDir = [&](const QString& dirPath) {
+        QDir modulesDir(dirPath);
+        if (!modulesDir.exists()) return;
+        QStringList subdirs = modulesDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const QString& subdir : subdirs) {
+            QString subdirPath = dirPath + "/" + subdir;
+            // Only process subdirectories that have a manifest.json
+            QString manifestPath = subdirPath + "/manifest.json";
+            QFile manifestFile(manifestPath);
+            if (!manifestFile.open(QIODevice::ReadOnly)) continue;
+            QJsonDocument doc = QJsonDocument::fromJson(manifestFile.readAll());
+            manifestFile.close();
+            if (!doc.isObject()) continue;
+            QString type = doc.object().value("type").toString();
+            if (type == "ui") continue; // Skip UI plugins
+            // Use directory name to find the main library
+            QString pluginPath = subdirPath + "/" + subdir + libExtension;
+            if (QFile::exists(pluginPath)) {
+                logos_core_process_plugin(pluginPath.toUtf8().constData());
+            }
         }
-    }
-    
+    };
+
+    scanModulesDir(modulesDirectory());
+
     QFileInfo bundledDirInfo(modulesDirectory());
     if (!bundledDirInfo.isWritable()) {
         QString userModulesDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/modules";
-        QDir userModulesDirObj(userModulesDir);
-        if (userModulesDirObj.exists()) {
-            QStringList entries = userModulesDirObj.entryList(QStringList() << libExtension, QDir::Files);
-            for (const QString& entry : entries) {
-                QString fullPath = userModulesDirObj.absoluteFilePath(entry);
-                logos_core_process_plugin(fullPath.toUtf8().constData());
-            }
-        }
+        scanModulesDir(userModulesDir);
     }
-    
+
     emit coreModulesChanged();
 }
 
@@ -606,17 +613,10 @@ void MainUIBackend::refreshLauncherApps()
 
 void MainUIBackend::openInstallPluginDialog()
 {
-    QString filter;
-#if defined(Q_OS_MAC)
-    filter = "Plugin Files (*.dylib *.lgx);;Dynamic Library (*.dylib);;LGX Package (*.lgx);;All Files (*)";
-#elif defined(Q_OS_WIN)
-    filter = "Plugin Files (*.dll *.lgx);;Dynamic Link Library (*.dll);;LGX Package (*.lgx);;All Files (*)";
-#else
-    filter = "Plugin Files (*.so *.lgx);;Shared Object (*.so);;LGX Package (*.lgx);;All Files (*)";
-#endif
-    
+    QString filter = "LGX Package (*.lgx);;All Files (*)";
+
     QString filePath = QFileDialog::getOpenFileName(nullptr, tr("Select Plugin to Install"), QString(), filter);
-    
+
     if (!filePath.isEmpty()) {
         installPluginFromPath(filePath);
     }
@@ -624,127 +624,21 @@ void MainUIBackend::openInstallPluginDialog()
 
 void MainUIBackend::installPluginFromPath(const QString& filePath)
 {
-    QFileInfo fileInfo(filePath);
-    
+    LogosModules logos(m_logosAPI);
+
 #ifdef LOGOS_DISTRIBUTED_BUILD
-    // For distributed builds (DMG/AppImage), always use Application Support
-    QString targetDir = userPluginsDirectory();
+    logos.package_manager.setPluginsDirectory(userModulesDirectory());
+    logos.package_manager.setUiPluginsDirectory(userPluginsDirectory());
 #else
-    // For development builds (nix), use bundled plugins directory
-    QString targetDir = pluginsDirectory();
+    logos.package_manager.setPluginsDirectory(modulesDirectory());
+    logos.package_manager.setUiPluginsDirectory(pluginsDirectory());
 #endif
-    
-    QDir dir;
-    
-    if (!dir.exists(targetDir)) {
-        dir.mkpath(targetDir);
-    }
-    
-    if (fileInfo.suffix().toLower() == "lgx") {
-        qDebug() << "Installing LGX package:" << filePath;
-        QTemporaryDir tempDir;
-        if (!tempDir.isValid()) {
-            qWarning() << "Failed to create temporary directory for LGX extraction";
-            return;
-        }
-        
-        QString errorMsg;
-        if (!extractLgxPackage(filePath, tempDir.path(), errorMsg)) {
-            qWarning() << "Failed to extract LGX package:" << errorMsg;
-            return;
-        }
-        
-        if (!copyLibraryFromExtracted(tempDir.path(), targetDir, false, errorMsg)) {
-            qWarning() << "Failed to copy library from extracted LGX package:" << errorMsg;
-            return;
-        }
-        
-        qDebug() << "Successfully installed plugin from LGX package to:" << targetDir;
-    } else {
-        // UI plugins: subdirectory structure
-        QString pluginName = fileInfo.completeBaseName();
-        QString pluginSubDir = targetDir + "/" + pluginName;
-        QDir().mkpath(pluginSubDir);
-        QString targetPath = pluginSubDir + "/" + fileInfo.fileName();
-        
-        if (QFile::exists(targetPath)) {
-            QFile::remove(targetPath);
-        }
-        
-        QFile::copy(filePath, targetPath);
-    }
-    
+
+    logos.package_manager.installPlugin(filePath);
+
+    refreshCoreModules();
     emit uiModulesChanged();
     emit launcherAppsChanged();
-}
-
-void MainUIBackend::openInstallCoreModuleDialog()
-{
-    QString filter;
-#if defined(Q_OS_MAC)
-    filter = "Module Files (*.dylib *.lgx);;Dynamic Library (*.dylib);;LGX Package (*.lgx);;All Files (*)";
-#elif defined(Q_OS_WIN)
-    filter = "Module Files (*.dll *.lgx);;Dynamic Link Library (*.dll);;LGX Package (*.lgx);;All Files (*)";
-#else
-    filter = "Module Files (*.so *.lgx);;Shared Object (*.so);;LGX Package (*.lgx);;All Files (*)";
-#endif
-    
-    QString filePath = QFileDialog::getOpenFileName(nullptr, tr("Select Core Module to Install"), QString(), filter);
-    
-    if (!filePath.isEmpty()) {
-        installCoreModuleFromPath(filePath);
-    }
-}
-
-void MainUIBackend::installCoreModuleFromPath(const QString& filePath)
-{
-    QFileInfo fileInfo(filePath);
-    
-#ifdef LOGOS_DISTRIBUTED_BUILD
-    // For distributed builds (DMG/AppImage), use Application Support
-    QString targetDir = userModulesDirectory();
-#else
-    // For development builds (nix), use bundled modules directory
-    QString targetDir = modulesDirectory();
-#endif
-    
-    QDir dir;
-    
-    if (!dir.exists(targetDir)) {
-        dir.mkpath(targetDir);
-    }
-    
-    if (fileInfo.suffix().toLower() == "lgx") {
-        qDebug() << "Installing LGX package as core module:" << filePath;
-        QTemporaryDir tempDir;
-        if (!tempDir.isValid()) {
-            qWarning() << "Failed to create temporary directory for LGX extraction";
-            return;
-        }
-        
-        QString errorMsg;
-        if (!extractLgxPackage(filePath, tempDir.path(), errorMsg)) {
-            qWarning() << "Failed to extract LGX package:" << errorMsg;
-            return;
-        }
-        
-        if (!copyLibraryFromExtracted(tempDir.path(), targetDir, true, errorMsg)) {
-            qWarning() << "Failed to copy library from extracted LGX package:" << errorMsg;
-            return;
-        }
-        
-        qDebug() << "Successfully installed core module from LGX package to:" << targetDir;
-    } else {
-        QString targetPath = targetDir + "/" + fileInfo.fileName();
-        
-        if (QFile::exists(targetPath)) {
-            QFile::remove(targetPath);
-        }
-        
-        QFile::copy(filePath, targetPath);
-    }
-    
-    refreshCoreModules();
 }
 
 QString MainUIBackend::pluginsDirectory() const
@@ -1006,116 +900,3 @@ void MainUIBackend::updateModuleStats()
     emit coreModulesChanged();
 }
 
-QString MainUIBackend::currentPlatformVariant() const
-{
-#if defined(Q_OS_MAC)
-  #if defined(__aarch64__) || defined(__arm64__)
-    return "darwin-arm64";
-  #else
-    return "darwin-amd64";
-  #endif
-#elif defined(Q_OS_LINUX)
-  #if defined(__aarch64__) || defined(__arm64__)
-    return "linux-arm64";
-  #else
-    return "linux-amd64";
-  #endif
-#elif defined(Q_OS_WIN)
-  #if defined(__aarch64__) || defined(__arm64__)
-    return "windows-arm64";
-  #else
-    return "windows-amd64";
-  #endif
-#else
-    return "unknown";
-#endif
-}
-
-bool MainUIBackend::extractLgxPackage(const QString& lgxPath, const QString& outputDir, QString& errorMsg)
-{
-    lgx_package_t pkg = lgx_load(lgxPath.toUtf8().constData());
-    if (!pkg) {
-        errorMsg = QString("Failed to load LGX package: %1").arg(lgx_get_last_error());
-        return false;
-    }
-    
-    QString variant = currentPlatformVariant();
-    qDebug() << "Extracting variant:" << variant << "from LGX package";
-    
-    if (!lgx_has_variant(pkg, variant.toUtf8().constData())) {
-        errorMsg = QString("Package does not contain variant for platform: %1").arg(variant);
-        lgx_free_package(pkg);
-        return false;
-    }
-    
-    lgx_result_t result = lgx_extract(pkg, variant.toUtf8().constData(), outputDir.toUtf8().constData());
-    
-    if (!result.success) {
-        errorMsg = QString("Failed to extract variant: %1").arg(result.error ? result.error : "unknown error");
-        lgx_free_package(pkg);
-        return false;
-    }
-    
-    lgx_free_package(pkg);
-    return true;
-}
-
-bool MainUIBackend::copyLibraryFromExtracted(const QString& extractedDir, const QString& targetDir, bool isCoreModule, QString& errorMsg)
-{
-    QString variant = currentPlatformVariant();
-    QString variantDir = extractedDir + "/" + variant;
-    
-    if (!QDir(variantDir).exists()) {
-        errorMsg = QString("Extracted variant directory not found: %1").arg(variantDir);
-        return false;
-    }
-    
-    QDir dir(variantDir);
-    QStringList filters;
-#if defined(Q_OS_MAC)
-    filters << "*.dylib";
-#elif defined(Q_OS_WIN)
-    filters << "*.dll";
-#else
-    filters << "*.so";
-#endif
-    
-    QFileInfoList libraryFiles = dir.entryInfoList(filters, QDir::Files, QDir::Name);
-    
-    if (libraryFiles.isEmpty()) {
-        errorMsg = QString("No library files found in extracted variant directory: %1").arg(variantDir);
-        return false;
-    }
-    
-    for (const QFileInfo& fileInfo : libraryFiles) {
-        QString sourceFile = fileInfo.absoluteFilePath();
-        QString targetPath;
-        
-        if (isCoreModule) {
-            // Core modules: flat structure
-            targetPath = targetDir + "/" + fileInfo.fileName();
-        } else {
-            // UI plugins: subdirectory structure
-            QString pluginName = fileInfo.completeBaseName();
-            QString pluginSubDir = targetDir + "/" + pluginName;
-            QDir().mkpath(pluginSubDir);
-            targetPath = pluginSubDir + "/" + fileInfo.fileName();
-        }
-        
-        if (QFile::exists(targetPath)) {
-            if (!QFile::remove(targetPath)) {
-                errorMsg = QString("Failed to remove existing file: %1").arg(targetPath);
-                return false;
-            }
-        }
-        
-        if (!QFile::copy(sourceFile, targetPath)) {
-            errorMsg = QString("Failed to copy library from %1 to %2").arg(sourceFile, targetPath);
-            return false;
-        }
-        
-        qDebug() << "Copied library file:" << targetPath;
-    }
-    
-    return true;
-}

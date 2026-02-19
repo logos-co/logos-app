@@ -88,8 +88,13 @@ pkgs.stdenv.mkDerivation rec {
       cp -RL "$qtdeclarative/lib/qt-6/plugins"/* "$out/LogosApp.app/Contents/PlugIns/" || true
     fi
     
+    # Copy all module directories (each module is in its own subdirectory)
     if [ -d "${app}/modules" ]; then
-      cp -L "${app}/modules"/*.dylib "$out/LogosApp.app/Contents/modules/" 2>/dev/null || true
+      for moduleDir in "${app}/modules"/*; do
+        if [ -d "$moduleDir" ]; then
+          cp -R "$moduleDir" "$out/LogosApp.app/Contents/modules/"
+        fi
+      done
     fi
     
     # Copy all plugin directories (each plugin is now in its own subdirectory)

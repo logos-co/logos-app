@@ -6,10 +6,10 @@
     nixpkgs.follows = "logos-liblogos/nixpkgs";
     logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk";
     logos-liblogos.url = "github:logos-co/logos-liblogos";
-    logos-package-manager.url = "github:logos-co/logos-package-manager-module";
+    logos-package-manager.url = "github:logos-co/logos-package-manager-module/properly-handle-portable-modules";
     logos-capability-module.url = "github:logos-co/logos-capability-module";
-    logos-package.url = "github:logos-co/logos-package";
-    logos-package-manager-ui.url = "github:logos-co/logos-package-manager-ui";
+    logos-package.url = "github:logos-co/logos-package/add-manifest-json-getter";
+    logos-package-manager-ui.url = "github:logos-co/logos-package-manager-ui/properly-handle-portable-modules";
     logos-webview-app.url = "github:logos-co/logos-webview-app";
     logos-design-system.url = "github:logos-co/logos-design-system";
     logos-counter-qml.url = "github:logos-co/counter_qml";
@@ -54,8 +54,8 @@
           # Use external counter-qml package
           counterQmlPlugin = logosCounterQml;
           
-          mainUIPlugin = import ./nix/main-ui.nix { 
-            inherit pkgs common src logosSdk logosPackageManager logosLiblogos logosPackageLib; 
+          mainUIPlugin = import ./nix/main-ui.nix {
+            inherit pkgs common src logosSdk logosPackageManager logosLiblogos;
           };
           
           # Use external package-manager-ui package
@@ -65,8 +65,8 @@
           webviewAppPlugin = logosWebviewApp;
           
           # Plugin packages (distributed builds for DMG/AppImage)
-          mainUIPluginDistributed = import ./nix/main-ui.nix { 
-            inherit pkgs common src logosSdk logosPackageManager logosLiblogos logosPackageLib;
+          mainUIPluginDistributed = import ./nix/main-ui.nix {
+            inherit pkgs common src logosSdk logosPackageManager logosLiblogos;
             distributed = true;
           };
           

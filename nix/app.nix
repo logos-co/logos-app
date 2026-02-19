@@ -221,12 +221,22 @@ pkgs.stdenv.mkDerivation rec {
       MINGW*|MSYS*|CYGWIN*) OS_EXT="dll";;
     esac
 
-    # Copy module plugins into the modules directory
+    # Copy module plugins into the modules directory (each in its own subdirectory with manifest.json)
     if [ -f "${logosCapabilityModule}/lib/capability_module_plugin.$OS_EXT" ]; then
-      cp -L "${logosCapabilityModule}/lib/capability_module_plugin.$OS_EXT" "$out/modules/"
+      mkdir -p "$out/modules/capability_module_plugin"
+      cp -L "${logosCapabilityModule}/lib/capability_module_plugin.$OS_EXT" "$out/modules/capability_module_plugin/"
+      cat > "$out/modules/capability_module_plugin/manifest.json" <<MANIFEST
+{ "name": "capability_module", "type": "core", "version": "1.0.0" }
+MANIFEST
+      echo "Installed capability_module_plugin to modules/capability_module_plugin/"
     fi
     if [ -f "${logosPackageManager}/lib/package_manager_plugin.$OS_EXT" ]; then
-      cp -L "${logosPackageManager}/lib/package_manager_plugin.$OS_EXT" "$out/modules/"
+      mkdir -p "$out/modules/package_manager_plugin"
+      cp -L "${logosPackageManager}/lib/package_manager_plugin.$OS_EXT" "$out/modules/package_manager_plugin/"
+      cat > "$out/modules/package_manager_plugin/manifest.json" <<MANIFEST
+{ "name": "package_manager", "type": "core", "version": "1.0.0" }
+MANIFEST
+      echo "Installed package_manager_plugin to modules/package_manager_plugin/"
     fi
     
     # Copy UI plugins to plugins directory (each in its own subdirectory)
