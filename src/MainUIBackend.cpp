@@ -1,4 +1,5 @@
 #include "MainUIBackend.h"
+#include "LogosAppPaths.h"
 #include <QDebug>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -504,12 +505,6 @@ void MainUIBackend::refreshCoreModules()
 
     scanModulesDir(modulesDirectory());
 
-    QFileInfo bundledDirInfo(modulesDirectory());
-    if (!bundledDirInfo.isWritable()) {
-        QString userModulesDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/modules";
-        scanModulesDir(userModulesDir);
-    }
-
     emit coreModulesChanged();
 }
 
@@ -626,13 +621,9 @@ void MainUIBackend::installPluginFromPath(const QString& filePath)
 {
     LogosModules logos(m_logosAPI);
 
-#ifdef LOGOS_DISTRIBUTED_BUILD
-    logos.package_manager.setPluginsDirectory(userModulesDirectory());
-    logos.package_manager.setUiPluginsDirectory(userPluginsDirectory());
-#else
     logos.package_manager.setPluginsDirectory(modulesDirectory());
     logos.package_manager.setUiPluginsDirectory(pluginsDirectory());
-#endif
+
 
     logos.package_manager.installPlugin(filePath);
 
@@ -643,60 +634,29 @@ void MainUIBackend::installPluginFromPath(const QString& filePath)
 
 QString MainUIBackend::pluginsDirectory() const
 {
-    return QCoreApplication::applicationDirPath() + "/../plugins";
-}
-
-QString MainUIBackend::userPluginsDirectory() const
-{
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/plugins";
+    return LogosAppPaths::pluginsDirectory();
 }
 
 QString MainUIBackend::modulesDirectory() const
 {
-    return QCoreApplication::applicationDirPath() + "/../modules";
-}
-
-QString MainUIBackend::userModulesDirectory() const
-{
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/modules";
+    return LogosAppPaths::modulesDirectory();
 }
 
 QJsonObject MainUIBackend::readQmlPluginMetadata(const QString& pluginName) const
 {
-    QFileInfo bundledPluginsDirInfo(pluginsDirectory());
-    if (!bundledPluginsDirInfo.isWritable()) {
-        QString userMetadataPath = userPluginsDirectory() + "/" + pluginName + "/metadata.json";
-        QFile userMetadataFile(userMetadataPath);
-        if (userMetadataFile.exists() && userMetadataFile.open(QIODevice::ReadOnly)) {
-            QJsonParseError parseError;
-            QJsonDocument doc = QJsonDocument::fromJson(userMetadataFile.readAll(), &parseError);
-            if (parseError.error == QJsonParseError::NoError && doc.isObject()) {
-                return doc.object();
-            }
+    QString userMetadataPath = pluginsDirectory() + "/" + pluginName + "/metadata.json";
+    QFile userMetadataFile(userMetadataPath);
+    if (userMetadataFile.exists() && userMetadataFile.open(QIODevice::ReadOnly)) {
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(userMetadataFile.readAll(), &parseError);
+        if (parseError.error == QJsonParseError::NoError && doc.isObject()) {
+            return doc.object();
         }
-    }
-    
-    QString metadataPath = pluginsDirectory() + "/" + pluginName + "/metadata.json";
-    QFile metadataFile(metadataPath);
-    if (!metadataFile.exists()) {
-        return QJsonObject();
+        qWarning() << "Failed to parse metadata for QML plugin" << pluginName << ":" << parseError.errorString();
     }
 
-    if (!metadataFile.open(QIODevice::ReadOnly)) {
-        qWarning() << "Failed to open metadata for plugin" << pluginName
-                   << ":" << metadataFile.errorString();
-        return QJsonObject();
-    }
-
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(metadataFile.readAll(), &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        qWarning() << "Failed to parse metadata for plugin" << pluginName
-                   << ":" << parseError.errorString();
-        return QJsonObject();
-    }
-
-    return doc.object();
+    qWarning() << "No metadata found for QML plugin" << pluginName;
+    return QJsonObject();
 }
 
 QJsonObject MainUIBackend::readPluginMetadata(const QString& pluginName) const
@@ -767,49 +727,27 @@ QStringList MainUIBackend::findAvailableUiPlugins() const
     };
     
     scanDirectory(pluginsDirectory());
-    
-    QFileInfo bundledPluginsDirInfo(pluginsDirectory());
-    if (!bundledPluginsDirInfo.isWritable()) {
-        scanDirectory(userPluginsDirectory());
-    }
-    
+
     return plugins;
 }
 
 QString MainUIBackend::getPluginPath(const QString& name) const
 {
-    QString libExtension;
-#if defined(Q_OS_MAC)
-    libExtension = ".dylib";
-#elif defined(Q_OS_WIN)
-    libExtension = ".dll";
-#else
-    libExtension = ".so";
-#endif
-    
-    QFileInfo bundledPluginsDirInfo(pluginsDirectory());
-    bool shouldCheckUserDir = !bundledPluginsDirInfo.isWritable();
-    
     if (isQmlPlugin(name)) {
         // QML plugins: return directory path (unchanged)
-        if (shouldCheckUserDir) {
-            QString userPath = userPluginsDirectory() + "/" + name;
-            if (QFileInfo::exists(userPath)) {
-                return userPath;
-            }
-        }
-        
         return pluginsDirectory() + "/" + name;
     }
 
     // C++ plugins: return path to dylib inside subdirectory
-    if (shouldCheckUserDir) {
-        QString userPluginPath = userPluginsDirectory() + "/" + name + "/" + name + libExtension;
-        if (QFile::exists(userPluginPath)) {
-            return userPluginPath;
-        }
-    }
-    
+    QString libExtension;
+    #if defined(Q_OS_MAC)
+        libExtension = ".dylib";
+    #elif defined(Q_OS_WIN)
+        libExtension = ".dll";
+    #else
+        libExtension = ".so";
+    #endif
+
     return pluginsDirectory() + "/" + name + "/" + name + libExtension;
 }
 

@@ -91,9 +91,7 @@ private:
     QStringList findAvailableUiPlugins() const;
     QString getPluginPath(const QString& name) const;
     QString pluginsDirectory() const;
-    QString userPluginsDirectory() const;
     QString modulesDirectory() const;
-    QString userModulesDirectory() const;
     bool isQmlPlugin(const QString& name) const;
     QJsonObject readQmlPluginMetadata(const QString& pluginName) const;
     QJsonObject readPluginMetadata(const QString& pluginName) const;

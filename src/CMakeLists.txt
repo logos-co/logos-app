@@ -84,6 +84,9 @@ if(NOT component-interfaces_FOUND)
     target_include_directories(component-interfaces INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/../app/interfaces)
 endif()
 
+# Shared utilities (LogosAppPaths, etc.)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../app/utils)
+
 set(SOURCES
     main_ui_plugin.cpp
     MainContainer.cpp
@@ -209,6 +212,7 @@ endif()
 
 # Option for distributed builds (DMG/AppImage)
 option(LOGOS_DISTRIBUTED_BUILD "Build for distribution (DMG/AppImage)" OFF)
+option(LOGOS_PORTABLE_BUILD "Build as a portable/distributed app" OFF)
 
 # Add Qt definitions
 target_compile_definitions(main_ui PRIVATE
@@ -220,6 +224,11 @@ target_compile_definitions(main_ui PRIVATE
 if(LOGOS_DISTRIBUTED_BUILD)
     target_compile_definitions(main_ui PRIVATE LOGOS_DISTRIBUTED_BUILD)
     message(STATUS "Building main_ui for distribution (LOGOS_DISTRIBUTED_BUILD enabled)")
+endif()
+
+if(LOGOS_PORTABLE_BUILD)
+    target_compile_definitions(main_ui PRIVATE LOGOS_PORTABLE_BUILD)
+    message(STATUS "Building main_ui as portable (LOGOS_PORTABLE_BUILD enabled)")
 endif()
 
 target_link_libraries(main_ui 
