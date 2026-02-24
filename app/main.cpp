@@ -106,6 +106,8 @@ int main(int argc, char *argv[])
 
     // Create QApplication first
     QApplication app(argc, argv);
+    app.setOrganizationName("Logos");
+    app.setApplicationName("LogosApp");
 
     // Install preinstall lgx packages before starting logos core, using the bundled
     // package_manager_plugin directly. This ensures all modules are in place when
