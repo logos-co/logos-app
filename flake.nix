@@ -15,12 +15,15 @@
     logos-counter-qml.url = "github:logos-co/counter_qml";
     logos-counter.url = "github:logos-co/counter";
     nix-bundle-lgx.url = "github:logos-co/nix-bundle-lgx";
+    nix-bundle-dir.url = "github:logos-co/nix-bundle-dir";
+    nix-bundle-appimage.url = "github:logos-co/nix-bundle-appimage";
   };
 
-  outputs = { self, nixpkgs, logos-cpp-sdk, logos-liblogos, logos-package-manager, logos-capability-module, logos-package, logos-package-manager-ui, logos-webview-app, logos-design-system, logos-counter-qml, logos-counter, nix-bundle-lgx }:
+  outputs = { self, nixpkgs, logos-cpp-sdk, logos-liblogos, logos-package-manager, logos-capability-module, logos-package, logos-package-manager-ui, logos-webview-app, logos-design-system, logos-counter-qml, logos-counter, nix-bundle-lgx, nix-bundle-dir, nix-bundle-appimage }:
     let
       systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
+        inherit system;
         pkgs = import nixpkgs { inherit system; };
         logosSdk = logos-cpp-sdk.packages.${system}.default;
         logosLiblogos = logos-liblogos.packages.${system}.default;
@@ -40,10 +43,11 @@
         logosCapabilityModuleSrc = logos-capability-module.outPath;
         bundleLgx = nix-bundle-lgx.bundlers.${system}.default;
         bundleLgxPortable = nix-bundle-lgx.bundlers.${system}.portable;
+        dirBundler = nix-bundle-dir.bundlers.${system}.qtApp;
       });
     in
     {
-      packages = forAllSystems ({ pkgs, logosSdk, logosLiblogos, logosPackageManager, logosPackageManagerLib, logosCapabilityModule, logosPackageLib, logosPackageManagerUI, logosPackageManagerUIDistributed, logosWebviewApp, logosDesignSystem, logosCounterQml, logosCounter, bundleLgx, bundleLgxPortable, ... }:
+      packages = forAllSystems ({ pkgs, system, logosSdk, logosLiblogos, logosPackageManager, logosPackageManagerLib, logosCapabilityModule, logosPackageLib, logosPackageManagerUI, logosPackageManagerUIDistributed, logosWebviewApp, logosDesignSystem, logosCounterQml, logosCounter, bundleLgx, bundleLgxPortable, dirBundler, ... }:
         let
           # Common configuration
           common = import ./nix/default.nix {
@@ -136,8 +140,19 @@
           app = app;
           portable = appDistributed;
           
+          # Bundle outputs
+          bin-bundle-dir = dirBundler appDistributed;
+
           # Default package
           default = app;
+        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          bin-appimage = nix-bundle-appimage.lib.${system}.mkAppImage {
+            drv = appDistributed;
+            name = "logos-app";
+            bundle = dirBundler appDistributed;
+            desktopFile = ./assets/logos-app.desktop;
+            icon = ./app/icons/logos.png;
+          };
         } // (if pkgs.stdenv.isDarwin then {
           # macOS distribution outputs
           app-bundle = appBundle;
