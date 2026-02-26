@@ -2615,6 +2615,29 @@
         "type": "github"
       }
     },
+    "nix-bundle-macos-app": {
+      "inputs": {
+        "nix-bundle-dir": [
+          "nix-bundle-dir"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1772630001,
+        "narHash": "sha256-NLE2uIZOSVb84lWXpybiUieV0Ngfn0Gelert83dqYuI=",
+        "owner": "logos-co",
+        "repo": "nix-bundle-macos-app",
+        "rev": "18d7b2e144d56bf6eecc2c0b3614770d3bf494a0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "nix-bundle-macos-app",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1759036355,
@@ -3654,6 +3677,7 @@
         "nix-bundle-appimage": "nix-bundle-appimage_7",
         "nix-bundle-dir": "nix-bundle-dir_14",
         "nix-bundle-lgx": "nix-bundle-lgx",
+        "nix-bundle-macos-app": "nix-bundle-macos-app",
         "nixpkgs": [
           "logos-liblogos",
           "nixpkgs"
