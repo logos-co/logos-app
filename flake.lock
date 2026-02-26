@@ -1184,11 +1184,11 @@
         "nixpkgs": "nixpkgs_6"
       },
       "locked": {
-        "lastModified": 1772034067,
-        "narHash": "sha256-gHRlOZoBvNne7A8gP7+YH8WNas50mIgJGP/ZZzhCyLo=",
+        "lastModified": 1772100797,
+        "narHash": "sha256-IGf1mWOiQZfBWxkIlwUPGogSDHuKyBEBUgUNx0dYFEs=",
         "owner": "logos-co",
         "repo": "logos-design-system",
-        "rev": "b3d5bda6765dace3a5aeefe9da74d8298490681b",
+        "rev": "e0101f17e38eebee5a551651206d371e5b0bc647",
         "type": "github"
       },
       "original": {
@@ -1423,11 +1423,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1772065159,
+        "lastModified": 1772115748,
         "narHash": "sha256-sPdAuYiLOjsulrk+uKMT7EG05ZlGT7OYEpgUh+f0nME=",
         "owner": "logos-co",
         "repo": "logos-liblogos",
-        "rev": "af9670c67641c61ede1d9dd5816cbc6bdf688c1f",
+        "rev": "07780444deb99f10e600247e3696ba495f2f071a",
         "type": "github"
       },
       "original": {
@@ -1503,11 +1503,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1772065159,
+        "lastModified": 1772115748,
         "narHash": "sha256-sPdAuYiLOjsulrk+uKMT7EG05ZlGT7OYEpgUh+f0nME=",
         "owner": "logos-co",
         "repo": "logos-liblogos",
-        "rev": "af9670c67641c61ede1d9dd5816cbc6bdf688c1f",
+        "rev": "07780444deb99f10e600247e3696ba495f2f071a",
         "type": "github"
       },
       "original": {
@@ -2426,6 +2426,29 @@
       "original": {
         "owner": "logos-co",
         "repo": "nix-bundle-lgx",
+        "type": "github"
+      }
+    },
+    "nix-bundle-macos-app": {
+      "inputs": {
+        "nix-bundle-dir": [
+          "nix-bundle-dir"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1772119200,
+        "narHash": "sha256-iyf3sfaOygMVmPfEurkOINODmhtwvq8poY65xPl+DZg=",
+        "owner": "logos-co",
+        "repo": "nix-bundle-macos-app",
+        "rev": "86396dc3090019a602895c1c64be5738177d48a9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "nix-bundle-macos-app",
         "type": "github"
       }
     },
@@ -3372,6 +3395,7 @@
         "nix-bundle-appimage": "nix-bundle-appimage_4",
         "nix-bundle-dir": "nix-bundle-dir_8",
         "nix-bundle-lgx": "nix-bundle-lgx",
+        "nix-bundle-macos-app": "nix-bundle-macos-app",
         "nixpkgs": [
           "logos-liblogos",
           "nixpkgs"
