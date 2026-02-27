@@ -1184,11 +1184,11 @@
         "nixpkgs": "nixpkgs_6"
       },
       "locked": {
-        "lastModified": 1772034067,
-        "narHash": "sha256-gHRlOZoBvNne7A8gP7+YH8WNas50mIgJGP/ZZzhCyLo=",
+        "lastModified": 1772100797,
+        "narHash": "sha256-IGf1mWOiQZfBWxkIlwUPGogSDHuKyBEBUgUNx0dYFEs=",
         "owner": "logos-co",
         "repo": "logos-design-system",
-        "rev": "b3d5bda6765dace3a5aeefe9da74d8298490681b",
+        "rev": "e0101f17e38eebee5a551651206d371e5b0bc647",
         "type": "github"
       },
       "original": {
