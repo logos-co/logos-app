@@ -12,6 +12,8 @@ pkgs.stdenv.mkDerivation rec {
   buildInputs = [ pkgs.qt6.qtbase pkgs.qt6.qtdeclarative ];
   
   appSrc = src;
+
+  doInstallCheck = true;
   
   installPhase = ''
     runHook preInstall
@@ -133,6 +135,40 @@ EOF
     ln -s "LogosApp.app/Contents/MacOS/LogosApp" "$out/LogosApp"
     
     runHook postInstall
+  '';
+
+  installCheckPhase = ''
+    echo "=== Final verification ==="
+    
+    failures_file="$out/.check_failures.txt"
+    > "$failures_file"
+    
+    # Find all binaries with nix store references
+    find "$out/LogosApp.app/Contents" -type f ! -type l 2>/dev/null | while read -r filepath; do
+      if file "$filepath" 2>/dev/null | grep -q "Mach-O"; then
+        nix_refs=$(otool -L "$filepath" 2>/dev/null | tail -n +2 | grep "/nix/store" || true)
+        if [ -n "$nix_refs" ]; then
+          echo "==== $(basename "$filepath") ====" >> "$failures_file"
+          echo "$filepath" >> "$failures_file"
+          echo "$nix_refs" >> "$failures_file"
+          echo "" >> "$failures_file"
+        fi
+      fi
+    done
+    
+    # Check if we found any failures
+    if [ -s "$failures_file" ]; then
+      echo "ERROR: Found binaries with hardcoded Nix store references:"
+      echo ""
+      cat "$failures_file"
+      echo ""
+      echo "Total binaries with issues: $(grep -c "====" "$failures_file")"
+      rm "$failures_file"
+      exit 1
+    fi
+    
+    rm -f "$failures_file"
+    echo "No hardcoded Nix store references found - app bundle is portable"
   '';
   
   meta = with pkgs.lib; {
