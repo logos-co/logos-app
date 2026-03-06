@@ -1,5 +1,9 @@
 # logos-app
 
+## Download
+
+Prebuilt binaries are available for Linux (AppImage) and macOS (DMG) from the [latest release](https://github.com/logos-co/logos-app/releases/latest).
+
 ## How to Build
 
 ### Using Nix (Recommended)
