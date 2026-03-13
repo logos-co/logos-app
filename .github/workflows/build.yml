@@ -28,32 +28,8 @@ jobs:
       - name: Build bin-appimage
         run: nix build .#bin-appimage
 
-
-      - name: Install OpenGL libs
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgl1 \
-            libegl1 \
-            libopengl0
-
       - name: Smoke test (Linux)
-        run: |
-          set +e
-          timeout 10 ./result/logos-app.AppImage --appimage-extract-and-run -platform offscreen 2>&1 | tee /tmp/logos-launch.log
-          CODE=${PIPESTATUS[0]}
-          set -e
-          if grep -qE "QQmlApplicationEngine failed|module.*is not installed|Cannot assign|failed to load component" /tmp/logos-launch.log; then
-            echo "❌ Critical QML errors"
-            cat /tmp/logos-launch.log
-            exit 1
-          fi
-          if [ "$CODE" -ne 124 ] && [ "$CODE" -ne 0 ]; then
-            echo "❌ App crashed with exit code $CODE"
-            cat /tmp/logos-launch.log
-            exit 1
-          fi
-          echo "✅ Smoke test passed"
+        run: nix build .#smoke-test --out-link result-smoke
 
       - name: Rename AppImage with architecture
         run: |
@@ -79,24 +55,7 @@ jobs:
         run: nix build .#bin-macos-app
 
       - name: Smoke test
-        run: |
-          ./result/LogosApp.app/Contents/MacOS/LogosApp -platform offscreen > /tmp/logos-launch.log 2>&1 &
-          APP_PID=$!
-          sleep 10
-          if grep -qE "QQmlApplicationEngine failed|module.*is not installed|Cannot assign|failed to load component" /tmp/logos-launch.log; then
-            echo "❌ Critical QML errors detected"
-            cat /tmp/logos-launch.log
-            kill $APP_PID 2>/dev/null
-            exit 1
-          fi
-          if kill -0 $APP_PID 2>/dev/null; then
-            kill $APP_PID
-            echo "✅ App launched and ran for 10s"
-          else
-            echo "❌ App crashed"
-            cat /tmp/logos-launch.log
-            exit 1
-          fi
+        run: nix build .#smoke-test-bundle --out-link result-smoke
 
       - name: Package app bundle as tarball
         run: |

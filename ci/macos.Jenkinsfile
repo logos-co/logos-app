@@ -44,28 +44,9 @@ pipeline {
     }
 
     stage('Smoke Test') {
-    steps { script {
-      sh '''
-        nix build '.#app'
-        ./result/bin/LogosApp -platform offscreen > /tmp/logos-launch.log 2>&1 &
-        APP_PID=$!
-        sleep 10
-        if grep -qE "QQmlApplicationEngine failed|module.*is not installed|Cannot assign|failed to load component" /tmp/logos-launch.log; then
-          echo "Critical QML errors detected"
-          cat /tmp/logos-launch.log
-          kill $APP_PID 2>/dev/null
-          exit 1
-        fi
-        if kill -0 $APP_PID 2>/dev/null; then
-          kill $APP_PID
-          echo "Smoke test passed"
-        else
-          echo "App crashed"
-          cat /tmp/logos-launch.log
-          exit 1
-        fi
-      '''
-      } }
+      steps {
+        sh 'nix build .#smoke-test-bundle --out-link result-smoke --extra-experimental-features "nix-command flakes"'
+      }
     }
 
     stage('Package') {
