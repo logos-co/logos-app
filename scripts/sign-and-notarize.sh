@@ -156,6 +156,12 @@ EOF
   security add-certificates -k /Library/Keychains/System.keychain /tmp/AppleIncRootCertificate.cer 2>/dev/null || true
   rm -f /tmp/AppleIncRootCertificate.cer
 
+  # CRITICAL: Set keychain search list BEFORE importing cert
+  security list-keychains -d user -s \
+      "${KEYCHAIN_NAME}" \
+      "$HOME/Library/Keychains/login.keychain-db" \
+      "/Library/Keychains/System.keychain"
+
   # Import cert
   security import "${MACOS_KEYCHAIN_FILE}" \
       -k "${KEYCHAIN_NAME}" \
@@ -166,12 +172,6 @@ EOF
   security set-key-partition-list \
       -S apple-tool:,apple:,codesign: \
       -s -k "${MACOS_KEYCHAIN_PASS}" "${KEYCHAIN_NAME}"
-
-  # CRITICAL: Explicitly include login + System keychains so Apple root certs are found
-  security list-keychains -d user -s \
-      "${KEYCHAIN_NAME}" \
-      "$HOME/Library/Keychains/login.keychain-db" \
-      "/Library/Keychains/System.keychain"
 
   echo "Debug: Keychain contents"
   echo "Available keys in ${KEYCHAIN_NAME}:"
