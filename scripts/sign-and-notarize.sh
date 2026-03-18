@@ -161,10 +161,14 @@ EOF
       "/Library/Keychains/System.keychain"
 
   echo "Debug: Keychain contents"
-  security dump-keychain "${KEYCHAIN_NAME}" 2>&1 | grep -i "label\|subject" | head -10 || true
+  echo "Available keys in ${KEYCHAIN_NAME}:"
+  security find-identity -v "${KEYCHAIN_NAME}" || echo "No identities in build.keychain"
   
-  echo "Debug: All identities available"
-  security find-identity -v -p codesigning || echo "No identities found"
+  echo "Debug: All codesigning identities in all keychains"
+  security find-identity -v -p codesigning || echo "No codesigning identities found"
+  
+  echo "Debug: Dump of build.keychain"
+  security dump-keychain "${KEYCHAIN_NAME}" 2>&1 | head -50 || true
 
   ###############################################################################
   # 2. Sign + repack .lgx archives in Contents/preinstall/
