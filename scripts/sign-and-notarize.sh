@@ -170,12 +170,18 @@ EOF
   ###############################################################################
   # 3. Import Identity and Set Permissions
   ###############################################################################
-  echo "Importing Identity P12..."
-  security import "${MACOS_KEYCHAIN_FILE}" \
+  echo "Extracting identity from P12..."
+  openssl pkcs12 -in "${MACOS_KEYCHAIN_FILE}" \
+      -passin pass:"${MACOS_KEYCHAIN_PASS}" \
+      -nodes -out /tmp/cert_and_key.pem
+  
+  echo "Importing identity from PEM..."
+  security import /tmp/cert_and_key.pem \
       -k "${KEYCHAIN_DB_PATH}" \
-      -P "${MACOS_KEYCHAIN_PASS}" \
-      -t agg \
-      -A
+      -T /usr/bin/codesign
+  
+  # Cleanup PEM
+  rm -f /tmp/cert_and_key.pem
 
   # This is the 'magic' command for Sequoia to allow codesign access
   security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${MACOS_KEYCHAIN_PASS}" "${KEYCHAIN_DB_PATH}"
