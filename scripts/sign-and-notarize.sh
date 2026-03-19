@@ -308,6 +308,11 @@ EOF
           codesign_with_retry "${CODESIGN_OPTS[@]}" "${fw_binary}" \
               || { echo "ERROR: failed to sign ${fw_binary}"; exit 1; }
       fi
+
+      # Sign the framework bundle itself after its binary
+      echo "  Signing framework bundle: ${fw}"
+      codesign_with_retry "${CODESIGN_OPTS[@]}" "${fw}" \
+          || { echo "ERROR: failed to sign ${fw}"; exit 1; }
   done
 
   ###############################################################################
