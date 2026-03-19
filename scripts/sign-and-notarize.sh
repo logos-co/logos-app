@@ -155,15 +155,22 @@ EOF
   # Prevent the keychain from locking during the build
   security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
 
-  # Ensure Apple root certs are available
-  echo "Ensuring Apple Root and Intermediate (WWDR) certificates..."
-  # We need BOTH the Root and the WWDR Intermediate for Sequoia to validate the cert
+  echo "Ensuring Apple Trust Chain..."
+  # 1. Root
   curl -s https://www.apple.com/appleca/AppleIncRootCertificate.cer -o /tmp/AppleRoot.cer
+  # 2. WWDR (For general development)
   curl -s https://developer.apple.com/certificationauthority/AppleWWDRCA.cer -o /tmp/AppleWWDR.cer
+  # 3. Developer ID (CRITICAL for Notarization/Developer ID certs)
+  curl -s https://developer.apple.com/certificationauthority/DeveloperIDCA.cer -o /tmp/DevID.cer
 
-  # Import them into your SPECIFIC build keychain
+  # Import all three
   security import /tmp/AppleRoot.cer -k "${KEYCHAIN_PATH}" -A
   security import /tmp/AppleWWDR.cer -k "${KEYCHAIN_PATH}" -A
+  security import /tmp/DevID.cer -k "${KEYCHAIN_PATH}" -A
+
+  # For Sequoia: Manually add the Root to the trust list for this user
+  # This avoids the "unable to build chain" warning
+  security add-trusted-cert -d -r trustRoot -k "${KEYCHAIN_PATH}" /tmp/AppleRoot.cer
 
   # CRITICAL: Set keychain search list BEFORE importing cert
   security list-keychains -d user -s "${KEYCHAIN_PATH}" \
@@ -182,9 +189,8 @@ EOF
       -S apple-tool:,apple:,codesign: \
       -s -k "${MACOS_KEYCHAIN_PASS}" "${KEYCHAIN_PATH}"
 
-  echo "Debug: Keychain contents"
-  echo "Available keys in ${KEYCHAIN_NAME}:"
-  security find-identity -v "${KEYCHAIN_PATH}" || echo "No identities in build.keychain"
+  echo "Debug: Listing ALL identities (even if invalid):"
+  security find-identity -p codesigning "${KEYCHAIN_PATH}"
   
   echo "Debug: All codesigning identities in all keychains"
   security find-identity -v -p codesigning || echo "No codesigning identities found"
