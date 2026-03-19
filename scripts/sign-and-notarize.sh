@@ -21,6 +21,22 @@ set -uxo pipefail
 #   MACOS_KEYCHAIN_FILE        - Path to the .p12 certificate file
 ###############################################################################
 
+codesign_with_retry() {
+    local attempts=3
+    local delay=15
+    local i=1
+    while (( i <= attempts )); do
+        if codesign "$@"; then
+            return 0
+        fi
+        echo "  codesign attempt ${i}/${attempts} failed, retrying in ${delay}s..."
+        sleep "$delay"
+        (( i++ ))
+    done
+    echo "ERROR: codesign failed after ${attempts} attempts"
+    return 1
+}
+
 # Parse arguments
 DMG_PATH=""
 BUNDLE_PATH=""
@@ -244,7 +260,7 @@ EOF
       while IFS= read -r dylib; do
           [[ -n "$dylib" ]] || continue
           echo "    Signing: ${dylib}"
-          codesign --force --options runtime \
+          codesign_with_retry --force --options runtime \
               --keychain "${KEYCHAIN_DB_PATH}" \
               --sign "${MACOS_CODESIGN_IDENT}" \
               --timestamp \
@@ -264,7 +280,7 @@ EOF
   while IFS= read -r dylib; do
       [[ -n "$dylib" ]] || continue
       echo "  Signing: ${dylib}"
-      codesign "${CODESIGN_OPTS[@]}" "$dylib" \
+      codesign_with_retry "${CODESIGN_OPTS[@]}" "$dylib" \
           || { echo "ERROR: failed to sign ${dylib}"; exit 1; }
   done < <(find "${CONTENTS}/Frameworks" -name '*.dylib' -type f)
 
@@ -275,7 +291,7 @@ EOF
   while IFS= read -r dylib; do
       [[ -n "$dylib" ]] || continue
       echo "  Signing: ${dylib}"
-      codesign "${CODESIGN_OPTS[@]}" "$dylib" \
+      codesign_with_retry "${CODESIGN_OPTS[@]}" "$dylib" \
           || { echo "ERROR: failed to sign ${dylib}"; exit 1; }
   done < <(find "${CONTENTS}/Resources/qt" -type f -name '*.dylib' 2>/dev/null)
 
@@ -289,7 +305,7 @@ EOF
 
       if [[ -f "${fw_binary}" ]]; then
           echo "  Signing framework binary: ${fw_binary}"
-          codesign "${CODESIGN_OPTS[@]}" "${fw_binary}" \
+          codesign_with_retry "${CODESIGN_OPTS[@]}" "${fw_binary}" \
               || { echo "ERROR: failed to sign ${fw_binary}"; exit 1; }
       fi
   done
@@ -304,7 +320,7 @@ EOF
              "${CONTENTS}/MacOS/logoscore"; do
       if [[ -f "${exe}" ]]; then
           echo "  Signing: ${exe}"
-          codesign "${CODESIGN_OPTS[@]}" --entitlements "${ENTITLEMENTS}" "${exe}" \
+          codesign_with_retry "${CODESIGN_OPTS[@]}" --entitlements "${ENTITLEMENTS}" "${exe}" \
               || { echo "ERROR: failed to sign ${exe}"; exit 1; }
       fi
   done
@@ -312,7 +328,7 @@ EOF
   # Sign the shell script wrapper last (no --options runtime for scripts)
   if [[ -f "${CONTENTS}/MacOS/LogosApp" ]]; then
     echo "  Signing wrapper: ${CONTENTS}/MacOS/LogosApp"
-    codesign --force --timestamp \
+    codesign_with_retry --force --timestamp \
         --keychain "${KEYCHAIN_DB_PATH}" \
         --sign "${MACOS_CODESIGN_IDENT}" \
         "${CONTENTS}/MacOS/LogosApp" \
@@ -323,7 +339,7 @@ EOF
   # 9. Sign the top-level app bundle
   ###############################################################################
   echo "Signing app bundle."
-  codesign "${CODESIGN_OPTS[@]}" --entitlements "${ENTITLEMENTS}" "${APP_BUNDLE}" \
+  codesign_with_retry "${CODESIGN_OPTS[@]}" --entitlements "${ENTITLEMENTS}" "${APP_BUNDLE}" \
       || { echo "ERROR: failed to sign app bundle"; exit 1; }
 
   ###############################################################################
