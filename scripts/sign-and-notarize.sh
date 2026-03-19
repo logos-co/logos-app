@@ -146,38 +146,26 @@ EOF
   ###############################################################################
   # 1. Set up a temporary keychain and import the certificate
   ###############################################################################
-  echo "Setting up keychain."
-  security delete-keychain "${KEYCHAIN_PATH}" 2>/dev/null || true
+  echo "Ensuring exact Apple Trust Chain for Developer ID G2..."
 
-  # Create and unlock
-  security create-keychain -p "${MACOS_KEYCHAIN_PASS}" "${KEYCHAIN_PATH}"
-  security unlock-keychain -p "${MACOS_KEYCHAIN_PASS}" "${KEYCHAIN_PATH}"
-  # Prevent the keychain from locking during the build
-  security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+  # 1. Developer ID Intermediate G2 (This matches your 'issu' blob)
+  curl -sL https://developer.apple.com/certificationauthority/DeveloperIDG2CA.cer -o /tmp/DevIDG2.cer
+  
+  # 2. Apple Root CA - G2 (The root for the G2 chain)
+  curl -sL https://www.apple.com/appleca/AppleRootCA-G2.cer -o /tmp/AppleRootG2.cer
 
-  echo "Ensuring Apple Trust Chain..."
-  # 1. Root
-  curl -s https://www.apple.com/appleca/AppleIncRootCertificate.cer -o /tmp/AppleRoot.cer
-  # 2. WWDR (For general development)
-  curl -s https://developer.apple.com/certificationauthority/AppleWWDRCA.cer -o /tmp/AppleWWDR.cer
-  # 3. Developer ID (CRITICAL for Notarization/Developer ID certs)
-  curl -s https://developer.apple.com/certificationauthority/DeveloperIDCA.cer -o /tmp/DevID.cer
+  # 3. Worldwide Developer Relations (Always good to have for general Darwin trust)
+  curl -sL https://developer.apple.com/certificationauthority/AppleWWDRCAG3.cer -o /tmp/WWDRG3.cer
 
-  # Import all three
-  security import /tmp/AppleRoot.cer -k "${KEYCHAIN_PATH}" -A
-  security import /tmp/AppleWWDR.cer -k "${KEYCHAIN_PATH}" -A
-  security import /tmp/DevID.cer -k "${KEYCHAIN_PATH}" -A
+  echo "Importing certificates into ${KEYCHAIN_PATH}..."
+  security import /tmp/DevIDG2.cer -k "${KEYCHAIN_PATH}" -A
+  security import /tmp/AppleRootG2.cer -k "${KEYCHAIN_PATH}" -A
+  security import /tmp/WWDRG3.cer -k "${KEYCHAIN_PATH}" -A
 
-  # For Sequoia: Manually add the Root to the trust list for this user
-  # This avoids the "unable to build chain" warning
-  security add-trusted-cert -d -r trustRoot -k "${KEYCHAIN_PATH}" /tmp/AppleRoot.cer
+  # CRITICAL: Re-establish the search list with the absolute path
+  security list-keychains -d user -s "${KEYCHAIN_PATH}" /Library/Keychains/System.keychain
 
-  # CRITICAL: Set keychain search list BEFORE importing cert
-  security list-keychains -d user -s "${KEYCHAIN_PATH}" \
-    "$HOME/Library/Keychains/login.keychain-db" \
-    "/Library/Keychains/System.keychain"
-
-  # Import cert
+  echo "Importing your Identity..."
   security import "${MACOS_KEYCHAIN_FILE}" \
       -k "${KEYCHAIN_PATH}" \
       -P "${MACOS_KEYCHAIN_PASS}" \
@@ -185,15 +173,16 @@ EOF
       -T /usr/bin/security \
       -A
 
-  security set-key-partition-list \
-      -S apple-tool:,apple:,codesign: \
-      -s -k "${MACOS_KEYCHAIN_PASS}" "${KEYCHAIN_PATH}"
+  echo "Setting key partition list for Sequoia..."
+  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${MACOS_KEYCHAIN_PASS}" "${KEYCHAIN_PATH}"
 
-  echo "Debug: Listing ALL identities (even if invalid):"
-  security find-identity -p codesigning "${KEYCHAIN_PATH}"
-  
-  echo "Debug: All codesigning identities in all keychains"
-  security find-identity -v -p codesigning || echo "No codesigning identities found"
+  echo "Final Verification:"
+  # This should now show '1 valid identities found'
+  security find-identity -v "${KEYCHAIN_PATH}"
+
+  # Debug command
+  echo "Verifying the cert if its valid"
+  security verify-cert -c "${MACOS_KEYCHAIN_FILE}" -p codesigning
   
   echo "Debug: Dump of build.keychain"
   security dump-keychain "${KEYCHAIN_PATH}" 2>&1 | head -50 || true
