@@ -87,7 +87,7 @@ CONTENTS="${APP_BUNDLE}/Contents"
 ENTITLEMENTS="${TEMP_DIR}/entitlements.plist"
 KEYCHAIN_NAME="build.keychain"
 KEYCHAIN_DB_PATH="${HOME}/Library/Keychains/${KEYCHAIN_NAME}-db"
-CERT_DIR="/Users/jenkins/certs"
+CERT_DIR="/Users/jenkins/certs2"
 
 # Codesign options — hardened runtime required for notarization
 CODESIGN_OPTS=(
@@ -168,6 +168,12 @@ EOF
   ###############################################################################
   # 3. Import Trust Chain from Apple
   ###############################################################################
+  echo "Downloading Apple Trust Chain."
+  mkdir -p "${CERT_DIR}"
+  curl -fsSL -o "${CERT_DIR}/AppleRootCA-G2.cer"  https://www.apple.com/certificateauthority/AppleRootCA-G2.cer
+  curl -fsSL -o "${CERT_DIR}/AppleWWDRCAG2.cer"   https://www.apple.com/certificateauthority/AppleWWDRCAG2.cer
+  curl -fsSL -o "${CERT_DIR}/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+
   echo "Importing Apple Trust Chain from local storage."
   security import "${CERT_DIR}/AppleRootCA-G2.cer"   -k "${KEYCHAIN_DB_PATH}" -t cert
   security import "${CERT_DIR}/AppleWWDRCAG2.cer"    -k "${KEYCHAIN_DB_PATH}" -t cert
@@ -175,14 +181,17 @@ EOF
 
   echo "Setting trust for CA certs..."
   security add-trusted-cert -r trustRoot \
+      -p codeSign \
       -k "${KEYCHAIN_DB_PATH}" \
       "${CERT_DIR}/AppleRootCA-G2.cer"
 
   security add-trusted-cert -r trustAsRoot \
+      -p codeSign \
       -k "${KEYCHAIN_DB_PATH}" \
       "${CERT_DIR}/AppleWWDRCAG2.cer"
 
   security add-trusted-cert -r trustAsRoot \
+      -p codeSign \
       -k "${KEYCHAIN_DB_PATH}" \
       "${CERT_DIR}/DeveloperIDG2CA.cer"
 
