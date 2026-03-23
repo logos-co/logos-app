@@ -28,6 +28,10 @@
 extern "C" {
     char* logos_core_get_module_stats();
     char* logos_core_process_plugin(const char* plugin_path);
+    char** logos_core_get_known_plugins();
+    char** logos_core_get_loaded_plugins();
+    int logos_core_load_plugin_with_dependencies(const char* plugin_name);
+    int logos_core_unload_plugin(const char* plugin_name);
 }
 
 MainUIBackend::MainUIBackend(LogosAPI* logosAPI, QObject* parent)
@@ -96,6 +100,19 @@ void MainUIBackend::subscribeToPackageInstallationEvents()
                 refreshCoreModules();
                 refreshLauncherApps();
             });
+        }
+    });
+
+    logos.package_manager.on("corePluginFileInstalled", [](const QVariantList& data) {
+        if (data.isEmpty()) return;
+        QString pluginPath = data[0].toString();
+        qDebug() << "Processing installed core plugin:" << pluginPath;
+        char* result = logos_core_process_plugin(pluginPath.toUtf8().constData());
+        if (result) {
+            qDebug() << "Successfully processed plugin:" << QString::fromUtf8(result);
+            delete[] result;
+        } else {
+            qWarning() << "Failed to process plugin:" << pluginPath;
         }
     });
 }
@@ -176,13 +193,12 @@ void MainUIBackend::loadUiModule(const QString& moduleName)
     // Load core module dependencies from metadata
     QJsonObject metadata = readPluginMetadata(moduleName);
     QJsonArray dependencies = metadata.value("dependencies").toArray();
-    if (!dependencies.isEmpty() && m_logosAPI) {
-        LogosModules logos(m_logosAPI);
+    if (!dependencies.isEmpty()) {
         for (const QJsonValue& dep : dependencies) {
             QString depName = dep.toString();
             if (!depName.isEmpty()) {
                 qDebug() << "Loading core module dependency for UI module" << moduleName << ":" << depName;
-                bool success = logos.core_manager.loadPlugin(depName);
+                bool success = logos_core_load_plugin_with_dependencies(depName.toUtf8().constData()) == 1;
                 if (!success) {
                     qWarning() << "Failed to load core module dependency" << depName << "for UI module" << moduleName;
                     return;
@@ -395,27 +411,31 @@ void MainUIBackend::onPluginWindowClosed(const QString& pluginName)
 QVariantList MainUIBackend::coreModules() const
 {
     QVariantList modules;
-    
-    if (!m_logosAPI) {
+
+    // Build the set of loaded plugins for status checking
+    QStringList loadedPlugins;
+    char** loaded = logos_core_get_loaded_plugins();
+    if (loaded) {
+        for (char** p = loaded; *p != nullptr; ++p) {
+            loadedPlugins << QString::fromUtf8(*p);
+            delete[] *p;
+        }
+        delete[] loaded;
+    }
+
+    char** known = logos_core_get_known_plugins();
+    if (!known) {
         return modules;
     }
-    
-    LogosAPIClient* coreManagerClient = m_logosAPI->getClient("core_manager");
-    if (!coreManagerClient || !coreManagerClient->isConnected()) {
-        qWarning() << "Core manager client is not available";
-        return modules;
-    }
-    
-    LogosModules logos(m_logosAPI);
-    QJsonArray pluginsArray = logos.core_manager.getKnownPlugins();
-    
-    for (const QJsonValue& val : pluginsArray) {
-        QJsonObject pluginObj = val.toObject();
-        QString name = pluginObj["name"].toString();
+
+    for (char** p = known; *p != nullptr; ++p) {
+        QString name = QString::fromUtf8(*p);
+        delete[] *p;
+
         QVariantMap module;
         module["name"] = name;
-        module["isLoaded"] = pluginObj["loaded"].toBool();
-        
+        module["isLoaded"] = loadedPlugins.contains(name);
+
         if (m_moduleStats.contains(name)) {
             module["cpu"] = m_moduleStats[name]["cpu"];
             module["memory"] = m_moduleStats[name]["memory"];
@@ -423,31 +443,20 @@ QVariantList MainUIBackend::coreModules() const
             module["cpu"] = "0.0";
             module["memory"] = "0.0";
         }
-        
+
         modules.append(module);
     }
-    
+    delete[] known;
+
     return modules;
 }
 
 void MainUIBackend::loadCoreModule(const QString& moduleName)
 {
     qDebug() << "Loading core module:" << moduleName;
-    
-    if (!m_logosAPI) {
-        qWarning() << "LogosAPI not available";
-        return;
-    }
-    
-    LogosAPIClient* coreManagerClient = m_logosAPI->getClient("core_manager");
-    if (!coreManagerClient || !coreManagerClient->isConnected()) {
-        qWarning() << "Core manager client is not available";
-        return;
-    }
-    
-    LogosModules logos(m_logosAPI);
-    bool success = logos.core_manager.loadPlugin(moduleName);
-    
+
+    bool success = logos_core_load_plugin_with_dependencies(moduleName.toUtf8().constData()) == 1;
+
     if (success) {
         qDebug() << "Successfully loaded core module:" << moduleName;
         emit coreModulesChanged();
@@ -459,21 +468,9 @@ void MainUIBackend::loadCoreModule(const QString& moduleName)
 void MainUIBackend::unloadCoreModule(const QString& moduleName)
 {
     qDebug() << "Unloading core module:" << moduleName;
-    
-    if (!m_logosAPI) {
-        qWarning() << "LogosAPI not available";
-        return;
-    }
-    
-    LogosAPIClient* coreManagerClient = m_logosAPI->getClient("core_manager");
-    if (!coreManagerClient || !coreManagerClient->isConnected()) {
-        qWarning() << "Core manager client is not available";
-        return;
-    }
-    
-    LogosModules logos(m_logosAPI);
-    bool success = logos.core_manager.unloadPlugin(moduleName);
-    
+
+    bool success = logos_core_unload_plugin(moduleName.toUtf8().constData()) == 1;
+
     if (success) {
         qDebug() << "Successfully unloaded core module:" << moduleName;
         emit coreModulesChanged();
@@ -641,7 +638,7 @@ void MainUIBackend::installPluginFromPath(const QString& filePath)
     logos.package_manager.setUiPluginsDirectory(pluginsDirectory());
 
 
-    logos.package_manager.installPlugin(filePath);
+    logos.package_manager.installPlugin(filePath, false);
 
     refreshCoreModules();
     emit uiModulesChanged();
