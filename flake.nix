@@ -209,12 +209,10 @@
           # Default package
           default = app;
         } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          bin-appimage = nix-bundle-appimage.lib.${system}.mkAppImage {
-            drv = appDistributed;
-            name = "logos-basecamp";
-            bundle = dirBundler appDistributed;
-            desktopFile = ./assets/logos-basecamp.desktop;
-            icon = ./app/icons/logos.png;
+          bin-appimage = import ./nix/appimage.nix {
+            inherit pkgs src;
+            app = appDistributed;
+            version = common.version;
           };
         } // pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
           bin-macos-app = macosApp;

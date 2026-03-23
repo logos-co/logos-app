@@ -38,6 +38,23 @@ jobs:
           nix build .#smoke-test --out-link result-smoke -L
           cat result-smoke/smoke-test.log
 
+      - name: Verify AppImage architecture
+        run: |
+          arch="${{ matrix.arch }}"
+          arch_short="${arch%%-*}"
+          src=$(find result/ -name '*.AppImage' -print -quit)
+          case "$arch_short" in
+            x86_64)  expected="x86-64" ;;
+            aarch64) expected="ARM aarch64" ;;
+          esac
+          file_output=$(file "$src")
+          if echo "$file_output" | grep -q "$expected"; then
+            echo "Architecture check passed: $file_output"
+          else
+            echo "ERROR: Expected $expected runtime in AppImage but got: $file_output"
+            exit 1
+          fi
+
       - name: Rename AppImage with architecture
         run: |
           arch="${{ matrix.arch }}"

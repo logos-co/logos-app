@@ -57,6 +57,19 @@ pipeline {
       }
     }
 
+    stage('Verify AppImage Architecture') {
+      steps { script {
+        def arch = getArch()
+        def expected = (arch == 'aarch64') ? 'ARM aarch64' : 'x86-64'
+        def src = sh(script: 'find result/ -name "*.AppImage" -print -quit', returnStdout: true).trim()
+        def fileOutput = sh(script: "file '${src}'", returnStdout: true).trim()
+        if (!fileOutput.contains(expected)) {
+          error("Expected ${expected} runtime in AppImage but got: ${fileOutput}")
+        }
+        echo "Architecture check passed: ${fileOutput}"
+      } }
+    }
+
     stage('Package') {
       steps {
         sh 'mkdir -p pkg'
