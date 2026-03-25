@@ -1,5 +1,5 @@
 # Common build configuration shared across all packages
-{ pkgs, logosSdk, logosLiblogos }:
+{ pkgs, logosSdk, logosModule, logosLiblogos }:
 
 {
   pname = "logos-basecamp";
@@ -26,15 +26,17 @@
   ];
   
   # Common CMake flags
-  cmakeFlags = [ 
+  cmakeFlags = [
     "-GNinja"
     "-DLOGOS_CPP_SDK_ROOT=${logosSdk}"
+    "-DLOGOS_MODULE_ROOT=${logosModule}"
     "-DLOGOS_LIBLOGOS_ROOT=${logosLiblogos}"
   ];
   
   # Environment variables
   env = {
     LOGOS_CPP_SDK_ROOT = "${logosSdk}";
+    LOGOS_MODULE_ROOT = "${logosModule}";
     LOGOS_LIBLOGOS_ROOT = "${logosLiblogos}";
   };
   

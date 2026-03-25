@@ -1,5 +1,5 @@
 # Builds the main UI plugin
-{ pkgs, common, src, logosSdk, logosPackageManager, logosLiblogos, distributed ? false }:
+{ pkgs, common, src, logosSdk, logosModule, logosPackageManager, logosLiblogos, distributed ? false }:
 
 pkgs.stdenv.mkDerivation {
   pname = "${common.pname}-main-ui-plugin";
@@ -86,10 +86,12 @@ pkgs.stdenv.mkDerivation {
     
     echo "Configuring main UI plugin..."
     echo "logosSdk: ${logosSdk}"
+    echo "logosModule: ${logosModule}"
     echo "logosLiblogos: ${logosLiblogos}"
-    
+
     # Verify that the logosSdk exists
     test -d "${logosSdk}" || (echo "logosSdk not found" && exit 1)
+    test -d "${logosModule}" || (echo "logosModule not found" && exit 1)
     test -d "${logosLiblogos}" || (echo "logosLiblogos not found" && exit 1)
     
     cmake -S src -B build \
@@ -99,6 +101,7 @@ pkgs.stdenv.mkDerivation {
       -DLOGOS_DISTRIBUTED_BUILD=${if distributed then "ON" else "OFF"} \
       -DLOGOS_PORTABLE_BUILD=${if distributed then "ON" else "OFF"} \
       -DLOGOS_CPP_SDK_ROOT=$(pwd)/logos-cpp-sdk \
+      -DLOGOS_MODULE_ROOT=${logosModule} \
       -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos}
     
     runHook postConfigure

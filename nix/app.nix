@@ -1,5 +1,5 @@
 # Builds the logos-basecamp standalone application
-{ pkgs, common, src, logosLiblogos, logosSdk, logosDesignSystem, logosPackageManager, logosQtMcp ? null, preinstallPkgs ? [], portable ? false, enableInspector ? true }:
+{ pkgs, common, src, logosModule, logosLiblogos, logosSdk, logosDesignSystem, logosPackageManager, logosQtMcp ? null, preinstallPkgs ? [], portable ? false, enableInspector ? true }:
 
 let
   # webkitgtk became ABI-versioned; pick the newest available while staying
@@ -138,11 +138,13 @@ pkgs.stdenv.mkDerivation rec {
 
     echo "Configuring logos-basecamp..."
     echo "liblogos: ${logosLiblogos}"
+    echo "logos-module: ${logosModule}"
     echo "cpp-sdk: ${logosSdk}"
     echo "logos-design-system: ${logosDesignSystem}"
 
     # Verify that the built components exist
     test -d "${logosLiblogos}" || (echo "liblogos not found" && exit 1)
+    test -d "${logosModule}" || (echo "logos-module not found" && exit 1)
     test -d "${logosSdk}" || (echo "cpp-sdk not found" && exit 1)
     test -d "${logosDesignSystem}" || (echo "logos-design-system not found" && exit 1)
 
@@ -159,6 +161,7 @@ pkgs.stdenv.mkDerivation rec {
       -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=FALSE \
       -DCMAKE_INSTALL_RPATH="" \
       -DCMAKE_SKIP_BUILD_RPATH=TRUE \
+      -DLOGOS_MODULE_ROOT=${logosModule} \
       -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos} \
       -DLOGOS_CPP_SDK_ROOT=$(pwd)/logos-cpp-sdk \
       -DLOGOS_PORTABLE_BUILD=${if portable then "ON" else "OFF"} \

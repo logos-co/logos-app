@@ -53,24 +53,46 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/utils)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/macos)
 
 # Allow override from environment or command line (for nix builds)
-if(NOT DEFINED LOGOS_LIBLOGOS_ROOT)
-    # Get the real path of current source directory to handle symlinks
-    get_filename_component(REAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)
-    set(_core_poc_liblogos "${REAL_SOURCE_DIR}/../../logos-liblogos")
-    if(EXISTS "${_core_poc_liblogos}/interface.h")
-        set(LOGOS_LIBLOGOS_ROOT "${_core_poc_liblogos}")
-    else()
-        # Fallback to relative path
-        set(LOGOS_LIBLOGOS_ROOT "${REAL_SOURCE_DIR}/../../logos-liblogos")
-    endif()
+get_filename_component(REAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)
+
+# ── logos-module (provides interface.h) ──────────────────────────────────────
+if(NOT DEFINED LOGOS_MODULE_ROOT)
+    set(LOGOS_MODULE_ROOT "${REAL_SOURCE_DIR}/../../logos-module")
 endif()
 
-# Check if dependencies are available (support both source and installed layouts)
+set(_logos_module_found FALSE)
+if(EXISTS "${LOGOS_MODULE_ROOT}/src/interface.h")
+    set(_logos_module_found TRUE)
+    set(_logos_module_is_source TRUE)
+elseif(EXISTS "${LOGOS_MODULE_ROOT}/include/module_lib/interface.h")
+    set(_logos_module_found TRUE)
+    set(_logos_module_is_source FALSE)
+endif()
+
+if(NOT _logos_module_found)
+    message(FATAL_ERROR "logos-module not found at ${LOGOS_MODULE_ROOT}. "
+                        "Set LOGOS_MODULE_ROOT or run git submodule update --init --recursive.")
+endif()
+
+message(STATUS "Using logos-module at: ${LOGOS_MODULE_ROOT}")
+
+# logos-module include directories
+if(_logos_module_is_source)
+    include_directories(${LOGOS_MODULE_ROOT}/src)
+else()
+    include_directories(${LOGOS_MODULE_ROOT}/include/module_lib)
+endif()
+
+# ── logos-liblogos (provides liblogos_core library and logos_host binary) ─────
+if(NOT DEFINED LOGOS_LIBLOGOS_ROOT)
+    set(LOGOS_LIBLOGOS_ROOT "${REAL_SOURCE_DIR}/../../logos-liblogos")
+endif()
+
 set(_liblogos_found FALSE)
-if(EXISTS "${LOGOS_LIBLOGOS_ROOT}/interface.h")
+if(EXISTS "${LOGOS_LIBLOGOS_ROOT}/src/logos_core/logos_core.h")
     set(_liblogos_found TRUE)
     set(_liblogos_is_source TRUE)
-elseif(EXISTS "${LOGOS_LIBLOGOS_ROOT}/include/interface.h")
+elseif(EXISTS "${LOGOS_LIBLOGOS_ROOT}/include/logos_core.h")
     set(_liblogos_found TRUE)
     set(_liblogos_is_source FALSE)
 endif()
@@ -81,21 +103,11 @@ if(NOT _liblogos_found)
 endif()
 
 message(STATUS "Using logos-liblogos at: ${LOGOS_LIBLOGOS_ROOT}")
-message(STATUS "logos-liblogos layout: ${_liblogos_is_source}")
 
-# Include directories based on layout type
+# logos-liblogos library paths
 if(_liblogos_is_source)
-    include_directories(
-        ${LOGOS_LIBLOGOS_ROOT}/host
-        ${LOGOS_LIBLOGOS_ROOT}
-    )
-    # Set logos_core library path for source layout
     link_directories(${LOGOS_LIBLOGOS_ROOT}/build/lib)
 else()
-    include_directories(
-        ${LOGOS_LIBLOGOS_ROOT}/include
-    )
-    # Set logos_core library path for installed layout
     link_directories(${LOGOS_LIBLOGOS_ROOT}/lib)
 endif()
 

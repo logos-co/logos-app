@@ -6,6 +6,7 @@
     # Follow the same nixpkgs as logos-nix
     nixpkgs.follows = "logos-nix/nixpkgs";
     logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk";
+    logos-module.url = "github:logos-co/logos-module";
     logos-liblogos.url = "github:logos-co/logos-liblogos";
     logos-package-manager.url = "github:logos-co/logos-package-manager-module";
     logos-capability-module.url = "github:logos-co/logos-capability-module";
@@ -26,13 +27,14 @@
     };
   };
 
-  outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-liblogos, logos-package-manager, logos-capability-module, logos-package, logos-package-manager-ui, logos-webview-app, logos-design-system, logos-counter-qml, logos-counter, logos-qt-mcp, nix-bundle-lgx, nix-bundle-dir, nix-bundle-appimage, nix-bundle-macos-app }:
+  outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-module, logos-liblogos, logos-package-manager, logos-capability-module, logos-package, logos-package-manager-ui, logos-webview-app, logos-design-system, logos-counter-qml, logos-counter, logos-qt-mcp, nix-bundle-lgx, nix-bundle-dir, nix-bundle-appimage, nix-bundle-macos-app }:
     let
       systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
         inherit system;
         pkgs = import nixpkgs { inherit system; };
         logosSdk = logos-cpp-sdk.packages.${system}.default;
+        logosModule = logos-module.packages.${system}.default;
         logosLiblogos = logos-liblogos.packages.${system}.default;
         logosPackageManager = logos-package-manager.packages.${system}.default;
         logosPackageManagerLib = logos-package-manager.packages.${system}.lib;
@@ -57,11 +59,11 @@
       });
     in
     {
-      packages = forAllSystems ({ pkgs, system, logosSdk, logosLiblogos, logosLiblogosPortable, logosPackageManager, logosPackageManagerLib, logosPackageManagerPortable, logosCapabilityModule, logosPackageLib, logosPackageManagerUI, logosPackageManagerUIDistributed, logosWebviewApp, logosDesignSystem, logosCounterQml, logosCounter, logosQtMcp, bundleLgx, bundleLgxPortable, dirBundler, ... }:
+      packages = forAllSystems ({ pkgs, system, logosSdk, logosModule, logosLiblogos, logosLiblogosPortable, logosPackageManager, logosPackageManagerLib, logosPackageManagerPortable, logosCapabilityModule, logosPackageLib, logosPackageManagerUI, logosPackageManagerUIDistributed, logosWebviewApp, logosDesignSystem, logosCounterQml, logosCounter, logosQtMcp, bundleLgx, bundleLgxPortable, dirBundler, ... }:
         let
           # Common configuration
           common = import ./nix/default.nix {
-            inherit pkgs logosSdk logosLiblogos;
+            inherit pkgs logosSdk logosModule logosLiblogos;
           };
           src = ./.;
 
@@ -69,14 +71,14 @@
           counterPlugin = logosCounter;
           counterQmlPlugin = logosCounterQml;
           mainUIPlugin = import ./nix/main-ui.nix {
-            inherit pkgs common src logosSdk logosPackageManager logosLiblogos;
+            inherit pkgs common src logosSdk logosModule logosPackageManager logosLiblogos;
           };
           packageManagerUIPlugin = logosPackageManagerUI;
           webviewAppPlugin = logosWebviewApp;
 
           # Plugin packages (distributed builds for DMG/AppImage)
           mainUIPluginDistributed = import ./nix/main-ui.nix {
-            inherit pkgs common src logosSdk logosPackageManager logosLiblogos;
+            inherit pkgs common src logosSdk logosModule logosPackageManager logosLiblogos;
             distributed = true;
           };
           packageManagerUIPluginDistributed = logosPackageManagerUIDistributed;
@@ -105,7 +107,7 @@
 
           # App package (development build)
           app = import ./nix/app.nix {
-            inherit pkgs common src logosLiblogos logosSdk logosDesignSystem logosPackageManager;
+            inherit pkgs common src logosModule logosLiblogos logosSdk logosDesignSystem logosPackageManager;
             inherit logosQtMcp;
             preinstallPkgs = preinstallPkgsDev;
           };
@@ -113,7 +115,7 @@
           # App package (distributed build for DMG/AppImage)
           # Uses portable-compiled liblogos and package-manager for portable variant selection
           appDistributed = import ./nix/app.nix {
-            inherit pkgs common src logosSdk logosDesignSystem;
+            inherit pkgs common src logosModule logosSdk logosDesignSystem;
             logosLiblogos = logosLiblogosPortable;
             logosPackageManager = logosPackageManagerPortable;
             preinstallPkgs = preinstallPkgsDistributed;
@@ -138,7 +140,7 @@
 
           # Distributed build with inspector enabled (for macOS integration tests)
           appDistributedWithInspector = import ./nix/app.nix {
-            inherit pkgs common src logosSdk logosDesignSystem;
+            inherit pkgs common src logosModule logosSdk logosDesignSystem;
             inherit logosQtMcp;
             logosLiblogos = logosLiblogosPortable;
             logosPackageManager = logosPackageManagerPortable;
@@ -244,7 +246,7 @@
         integration-test = self.packages.${system}.integration-test;
       });
 
-      devShells = forAllSystems ({ pkgs, logosSdk, logosLiblogos, logosPackageManager, logosCapabilityModule, logosPackageLib, logosDesignSystem, logosCppSdkSrc, logosLiblogosSrc, logosPackageManagerSrc, logosCapabilityModuleSrc }: {
+      devShells = forAllSystems ({ pkgs, logosSdk, logosModule, logosLiblogos, logosPackageManager, logosCapabilityModule, logosPackageLib, logosDesignSystem, logosCppSdkSrc, logosLiblogosSrc, logosPackageManagerSrc, logosCapabilityModuleSrc }: {
         default = pkgs.mkShell {
           nativeBuildInputs = [
             pkgs.cmake
@@ -262,6 +264,7 @@
           shellHook = ''
             # Nix package paths (pre-built for host system)
             export LOGOS_CPP_SDK_ROOT="${logosSdk}"
+            export LOGOS_MODULE_ROOT="${logosModule}"
             export LOGOS_LIBLOGOS_ROOT="${logosLiblogos}"
             export LOGOS_PACKAGE_MANAGER_ROOT="${logosPackageManager}"
             export LOGOS_CAPABILITY_MODULE_ROOT="${logosCapabilityModule}"
@@ -278,6 +281,7 @@
             echo ""
             echo "Nix packages (host builds):"
             echo "  LOGOS_CPP_SDK_ROOT: $LOGOS_CPP_SDK_ROOT"
+            echo "  LOGOS_MODULE_ROOT: $LOGOS_MODULE_ROOT"
             echo "  LOGOS_LIBLOGOS_ROOT: $LOGOS_LIBLOGOS_ROOT"
             echo "  LOGOS_PACKAGE_MANAGER_ROOT: $LOGOS_PACKAGE_MANAGER_ROOT"
             echo "  LOGOS_CAPABILITY_MODULE_ROOT: $LOGOS_CAPABILITY_MODULE_ROOT"

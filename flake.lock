@@ -53,9 +53,9 @@
     },
     "logos-capability-module_3": {
       "inputs": {
-        "logos-cpp-sdk": "logos-cpp-sdk_6",
-        "logos-module": "logos-module_5",
-        "logos-nix": "logos-nix_25",
+        "logos-cpp-sdk": "logos-cpp-sdk_7",
+        "logos-module": "logos-module_6",
+        "logos-nix": "logos-nix_28",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-capability-module",
@@ -79,9 +79,9 @@
     },
     "logos-capability-module_4": {
       "inputs": {
-        "logos-cpp-sdk": "logos-cpp-sdk_8",
-        "logos-module": "logos-module_6",
-        "logos-nix": "logos-nix_29",
+        "logos-cpp-sdk": "logos-cpp-sdk_9",
+        "logos-module": "logos-module_7",
+        "logos-nix": "logos-nix_32",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-liblogos",
@@ -176,7 +176,32 @@
     },
     "logos-cpp-sdk_10": {
       "inputs": {
-        "logos-nix": "logos-nix_37",
+        "logos-nix": "logos-nix_33",
+        "nixpkgs": [
+          "logos-package-manager-ui",
+          "logos-liblogos",
+          "logos-cpp-sdk",
+          "logos-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1774280725,
+        "narHash": "sha256-RJ0QgIXg7XZp9DbcZruTHKifxqYItT+ek9XMiJNt/R0=",
+        "owner": "logos-co",
+        "repo": "logos-cpp-sdk",
+        "rev": "4197ee183041c33e90d8f90e80d810e5b7ed04bf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "logos-cpp-sdk",
+        "type": "github"
+      }
+    },
+    "logos-cpp-sdk_11": {
+      "inputs": {
+        "logos-nix": "logos-nix_40",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-package-manager-module",
@@ -199,9 +224,9 @@
         "type": "github"
       }
     },
-    "logos-cpp-sdk_11": {
+    "logos-cpp-sdk_12": {
       "inputs": {
-        "logos-nix": "logos-nix_45",
+        "logos-nix": "logos-nix_48",
         "nixpkgs": [
           "logos-webview-app",
           "logos-cpp-sdk",
@@ -233,11 +258,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1774280725,
-        "narHash": "sha256-RJ0QgIXg7XZp9DbcZruTHKifxqYItT+ek9XMiJNt/R0=",
+        "lastModified": 1774442805,
+        "narHash": "sha256-OsdDMkpeDe4j8eLrhcmXY6mtvDA930X1GWdKU1D1wBs=",
         "owner": "logos-co",
         "repo": "logos-cpp-sdk",
-        "rev": "4197ee183041c33e90d8f90e80d810e5b7ed04bf",
+        "rev": "21f8fb43d3733b4dece5a0e21472911e1214b614",
         "type": "github"
       },
       "original": {
@@ -282,11 +307,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1774280725,
-        "narHash": "sha256-RJ0QgIXg7XZp9DbcZruTHKifxqYItT+ek9XMiJNt/R0=",
+        "lastModified": 1774442805,
+        "narHash": "sha256-OsdDMkpeDe4j8eLrhcmXY6mtvDA930X1GWdKU1D1wBs=",
         "owner": "logos-co",
         "repo": "logos-cpp-sdk",
-        "rev": "4197ee183041c33e90d8f90e80d810e5b7ed04bf",
+        "rev": "21f8fb43d3733b4dece5a0e21472911e1214b614",
         "type": "github"
       },
       "original": {
@@ -297,7 +322,32 @@
     },
     "logos-cpp-sdk_5": {
       "inputs": {
-        "logos-nix": "logos-nix_16",
+        "logos-nix": "logos-nix_14",
+        "nixpkgs": [
+          "logos-liblogos",
+          "process-stats",
+          "logos-cpp-sdk",
+          "logos-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1774361657,
+        "narHash": "sha256-ojC5oLlzb7rrhArUaZzfChLxPwrPm1iAF+6lkH2kDCY=",
+        "owner": "logos-co",
+        "repo": "logos-cpp-sdk",
+        "rev": "39b0a9acce3dac6d8c4c2f30bd35571a17c42c37",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "logos-cpp-sdk",
+        "type": "github"
+      }
+    },
+    "logos-cpp-sdk_6": {
+      "inputs": {
+        "logos-nix": "logos-nix_19",
         "nixpkgs": [
           "logos-package-manager",
           "logos-cpp-sdk",
@@ -319,9 +369,9 @@
         "type": "github"
       }
     },
-    "logos-cpp-sdk_6": {
+    "logos-cpp-sdk_7": {
       "inputs": {
-        "logos-nix": "logos-nix_23",
+        "logos-nix": "logos-nix_26",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-capability-module",
@@ -344,9 +394,9 @@
         "type": "github"
       }
     },
-    "logos-cpp-sdk_7": {
+    "logos-cpp-sdk_8": {
       "inputs": {
-        "logos-nix": "logos-nix_26",
+        "logos-nix": "logos-nix_29",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-cpp-sdk",
@@ -360,32 +410,6 @@
         "owner": "logos-co",
         "repo": "logos-cpp-sdk",
         "rev": "4197ee183041c33e90d8f90e80d810e5b7ed04bf",
-        "type": "github"
-      },
-      "original": {
-        "owner": "logos-co",
-        "repo": "logos-cpp-sdk",
-        "type": "github"
-      }
-    },
-    "logos-cpp-sdk_8": {
-      "inputs": {
-        "logos-nix": "logos-nix_27",
-        "nixpkgs": [
-          "logos-package-manager-ui",
-          "logos-liblogos",
-          "logos-capability-module",
-          "logos-cpp-sdk",
-          "logos-nix",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1773956385,
-        "narHash": "sha256-CV0Lo1FrosBt/MSP+GWQGWXnYobxRGXGOREylNuwZ58=",
-        "owner": "logos-co",
-        "repo": "logos-cpp-sdk",
-        "rev": "4b66dac015e4b977d33cfae80a4c8e1d518679f3",
         "type": "github"
       },
       "original": {
@@ -400,17 +424,18 @@
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-liblogos",
+          "logos-capability-module",
           "logos-cpp-sdk",
           "logos-nix",
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1774280725,
-        "narHash": "sha256-RJ0QgIXg7XZp9DbcZruTHKifxqYItT+ek9XMiJNt/R0=",
+        "lastModified": 1773956385,
+        "narHash": "sha256-CV0Lo1FrosBt/MSP+GWQGWXnYobxRGXGOREylNuwZ58=",
         "owner": "logos-co",
         "repo": "logos-cpp-sdk",
-        "rev": "4197ee183041c33e90d8f90e80d810e5b7ed04bf",
+        "rev": "4b66dac015e4b977d33cfae80a4c8e1d518679f3",
         "type": "github"
       },
       "original": {
@@ -452,14 +477,15 @@
           "logos-liblogos",
           "logos-nix",
           "nixpkgs"
-        ]
+        ],
+        "process-stats": "process-stats"
       },
       "locked": {
-        "lastModified": 1774372066,
-        "narHash": "sha256-VS2MCr5jp7ARl/CEzMadlpp5LS5wpaOQ3EO+6rW+peE=",
+        "lastModified": 1774445466,
+        "narHash": "sha256-bZ2w+f5LjYOb3te+5w/hS/3MnmJ9/RpIpGTjmRoTI0s=",
         "owner": "logos-co",
         "repo": "logos-liblogos",
-        "rev": "9c006df0cf3923c4caab1afc2ff8b97f0173b7a9",
+        "rev": "9a174186132992c8a4d6a03a33effff01296527a",
         "type": "github"
       },
       "original": {
@@ -471,9 +497,9 @@
     "logos-liblogos_2": {
       "inputs": {
         "logos-capability-module": "logos-capability-module_4",
-        "logos-cpp-sdk": "logos-cpp-sdk_9",
-        "logos-module": "logos-module_7",
-        "logos-nix": "logos-nix_32",
+        "logos-cpp-sdk": "logos-cpp-sdk_10",
+        "logos-module": "logos-module_8",
+        "logos-nix": "logos-nix_35",
         "nix-bundle-appimage": "nix-bundle-appimage_2",
         "nix-bundle-dir": "nix-bundle-dir_4",
         "nixpkgs": [
@@ -572,9 +598,8 @@
     },
     "logos-module_4": {
       "inputs": {
-        "logos-nix": "logos-nix_17",
+        "logos-nix": "logos-nix_16",
         "nixpkgs": [
-          "logos-package-manager",
           "logos-module",
           "logos-nix",
           "nixpkgs"
@@ -596,10 +621,9 @@
     },
     "logos-module_5": {
       "inputs": {
-        "logos-nix": "logos-nix_24",
+        "logos-nix": "logos-nix_20",
         "nixpkgs": [
-          "logos-package-manager-ui",
-          "logos-capability-module",
+          "logos-package-manager",
           "logos-module",
           "logos-nix",
           "nixpkgs"
@@ -621,10 +645,9 @@
     },
     "logos-module_6": {
       "inputs": {
-        "logos-nix": "logos-nix_28",
+        "logos-nix": "logos-nix_27",
         "nixpkgs": [
           "logos-package-manager-ui",
-          "logos-liblogos",
           "logos-capability-module",
           "logos-module",
           "logos-nix",
@@ -651,6 +674,7 @@
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-liblogos",
+          "logos-capability-module",
           "logos-module",
           "logos-nix",
           "nixpkgs"
@@ -672,7 +696,32 @@
     },
     "logos-module_8": {
       "inputs": {
-        "logos-nix": "logos-nix_38",
+        "logos-nix": "logos-nix_34",
+        "nixpkgs": [
+          "logos-package-manager-ui",
+          "logos-liblogos",
+          "logos-module",
+          "logos-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1773963329,
+        "narHash": "sha256-zdvDHoYWQDse0eJ/UCKIJcfuYJ8NMgl6QfxRcyDEovI=",
+        "owner": "logos-co",
+        "repo": "logos-module",
+        "rev": "ac5a4f06ea94b01dd9c5fbb9ed4f20620beab88d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "logos-module",
+        "type": "github"
+      }
+    },
+    "logos-module_9": {
+      "inputs": {
+        "logos-nix": "logos-nix_41",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-package-manager-module",
@@ -1577,6 +1626,60 @@
         "type": "github"
       }
     },
+    "logos-nix_54": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_54"
+      },
+      "locked": {
+        "lastModified": 1773955630,
+        "narHash": "sha256-KqzMoWYIVp2xMgphs7v02T/BE54RKMFxpdC2duhJKG0=",
+        "owner": "logos-co",
+        "repo": "logos-nix",
+        "rev": "0e9e6d66ab8eb34f59e45ed448f7dc29130feb88",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "logos-nix",
+        "type": "github"
+      }
+    },
+    "logos-nix_55": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_55"
+      },
+      "locked": {
+        "lastModified": 1773955630,
+        "narHash": "sha256-KqzMoWYIVp2xMgphs7v02T/BE54RKMFxpdC2duhJKG0=",
+        "owner": "logos-co",
+        "repo": "logos-nix",
+        "rev": "0e9e6d66ab8eb34f59e45ed448f7dc29130feb88",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "logos-nix",
+        "type": "github"
+      }
+    },
+    "logos-nix_56": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_56"
+      },
+      "locked": {
+        "lastModified": 1773955630,
+        "narHash": "sha256-KqzMoWYIVp2xMgphs7v02T/BE54RKMFxpdC2duhJKG0=",
+        "owner": "logos-co",
+        "repo": "logos-nix",
+        "rev": "0e9e6d66ab8eb34f59e45ed448f7dc29130feb88",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "logos-nix",
+        "type": "github"
+      }
+    },
     "logos-nix_6": {
       "inputs": {
         "nixpkgs": "nixpkgs_6"
@@ -1651,7 +1754,7 @@
     },
     "logos-package": {
       "inputs": {
-        "logos-nix": "logos-nix_15",
+        "logos-nix": "logos-nix_18",
         "nixpkgs": [
           "logos-package",
           "logos-nix",
@@ -1674,9 +1777,9 @@
     },
     "logos-package-manager": {
       "inputs": {
-        "logos-cpp-sdk": "logos-cpp-sdk_5",
-        "logos-module": "logos-module_4",
-        "logos-nix": "logos-nix_18",
+        "logos-cpp-sdk": "logos-cpp-sdk_6",
+        "logos-module": "logos-module_5",
+        "logos-nix": "logos-nix_21",
         "logos-package": "logos-package_2",
         "nix-bundle-appimage": "nix-bundle-appimage",
         "nix-bundle-dir": "nix-bundle-dir_2",
@@ -1702,9 +1805,9 @@
     },
     "logos-package-manager-module": {
       "inputs": {
-        "logos-cpp-sdk": "logos-cpp-sdk_10",
-        "logos-module": "logos-module_8",
-        "logos-nix": "logos-nix_39",
+        "logos-cpp-sdk": "logos-cpp-sdk_11",
+        "logos-module": "logos-module_9",
+        "logos-nix": "logos-nix_42",
         "logos-package": "logos-package_3",
         "nix-bundle-appimage": "nix-bundle-appimage_3",
         "nix-bundle-dir": "nix-bundle-dir_6",
@@ -1732,9 +1835,9 @@
     "logos-package-manager-ui": {
       "inputs": {
         "logos-capability-module": "logos-capability-module_3",
-        "logos-cpp-sdk": "logos-cpp-sdk_7",
+        "logos-cpp-sdk": "logos-cpp-sdk_8",
         "logos-liblogos": "logos-liblogos_2",
-        "logos-nix": "logos-nix_36",
+        "logos-nix": "logos-nix_39",
         "logos-package-manager-module": "logos-package-manager-module",
         "nixpkgs": [
           "logos-package-manager-ui",
@@ -1758,7 +1861,7 @@
     },
     "logos-package_2": {
       "inputs": {
-        "logos-nix": "logos-nix_19",
+        "logos-nix": "logos-nix_22",
         "nixpkgs": [
           "logos-package-manager",
           "logos-package",
@@ -1782,7 +1885,7 @@
     },
     "logos-package_3": {
       "inputs": {
-        "logos-nix": "logos-nix_40",
+        "logos-nix": "logos-nix_43",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-package-manager-module",
@@ -1807,7 +1910,7 @@
     },
     "logos-package_4": {
       "inputs": {
-        "logos-nix": "logos-nix_51",
+        "logos-nix": "logos-nix_54",
         "nixpkgs": [
           "nix-bundle-lgx",
           "logos-package",
@@ -1831,7 +1934,7 @@
     },
     "logos-qt-mcp": {
       "inputs": {
-        "logos-nix": "logos-nix_44",
+        "logos-nix": "logos-nix_47",
         "nixpkgs": [
           "logos-qt-mcp",
           "logos-nix",
@@ -1854,8 +1957,8 @@
     },
     "logos-webview-app": {
       "inputs": {
-        "logos-cpp-sdk": "logos-cpp-sdk_11",
-        "logos-nix": "logos-nix_46",
+        "logos-cpp-sdk": "logos-cpp-sdk_12",
+        "logos-nix": "logos-nix_49",
         "nixpkgs": [
           "logos-webview-app",
           "logos-nix",
@@ -1878,7 +1981,7 @@
     },
     "nix-bundle-appimage": {
       "inputs": {
-        "logos-nix": "logos-nix_20",
+        "logos-nix": "logos-nix_23",
         "nix-bundle-dir": "nix-bundle-dir",
         "nixpkgs": [
           "logos-package-manager",
@@ -1903,7 +2006,7 @@
     },
     "nix-bundle-appimage_2": {
       "inputs": {
-        "logos-nix": "logos-nix_33",
+        "logos-nix": "logos-nix_36",
         "nix-bundle-dir": "nix-bundle-dir_3",
         "nixpkgs": [
           "logos-package-manager-ui",
@@ -1929,7 +2032,7 @@
     },
     "nix-bundle-appimage_3": {
       "inputs": {
-        "logos-nix": "logos-nix_41",
+        "logos-nix": "logos-nix_44",
         "nix-bundle-dir": "nix-bundle-dir_5",
         "nixpkgs": [
           "logos-package-manager-ui",
@@ -1955,7 +2058,7 @@
     },
     "nix-bundle-appimage_4": {
       "inputs": {
-        "logos-nix": "logos-nix_47",
+        "logos-nix": "logos-nix_50",
         "nix-bundle-dir": "nix-bundle-dir_7",
         "nixpkgs": [
           "nix-bundle-appimage",
@@ -1979,7 +2082,7 @@
     },
     "nix-bundle-dir": {
       "inputs": {
-        "logos-nix": "logos-nix_21",
+        "logos-nix": "logos-nix_24",
         "nixpkgs": [
           "logos-package-manager",
           "nix-bundle-appimage",
@@ -2002,7 +2105,7 @@
     },
     "nix-bundle-dir_2": {
       "inputs": {
-        "logos-nix": "logos-nix_22",
+        "logos-nix": "logos-nix_25",
         "nixpkgs": [
           "logos-package-manager",
           "nix-bundle-dir",
@@ -2026,7 +2129,7 @@
     },
     "nix-bundle-dir_3": {
       "inputs": {
-        "logos-nix": "logos-nix_34",
+        "logos-nix": "logos-nix_37",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-liblogos",
@@ -2050,7 +2153,7 @@
     },
     "nix-bundle-dir_4": {
       "inputs": {
-        "logos-nix": "logos-nix_35",
+        "logos-nix": "logos-nix_38",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-liblogos",
@@ -2075,7 +2178,7 @@
     },
     "nix-bundle-dir_5": {
       "inputs": {
-        "logos-nix": "logos-nix_42",
+        "logos-nix": "logos-nix_45",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-package-manager-module",
@@ -2099,7 +2202,7 @@
     },
     "nix-bundle-dir_6": {
       "inputs": {
-        "logos-nix": "logos-nix_43",
+        "logos-nix": "logos-nix_46",
         "nixpkgs": [
           "logos-package-manager-ui",
           "logos-package-manager-module",
@@ -2124,7 +2227,7 @@
     },
     "nix-bundle-dir_7": {
       "inputs": {
-        "logos-nix": "logos-nix_48",
+        "logos-nix": "logos-nix_51",
         "nixpkgs": [
           "nix-bundle-appimage",
           "nixpkgs"
@@ -2146,7 +2249,7 @@
     },
     "nix-bundle-dir_8": {
       "inputs": {
-        "logos-nix": "logos-nix_49",
+        "logos-nix": "logos-nix_52",
         "nixpkgs": [
           "nix-bundle-dir",
           "logos-nix",
@@ -2169,7 +2272,7 @@
     },
     "nix-bundle-dir_9": {
       "inputs": {
-        "logos-nix": "logos-nix_52",
+        "logos-nix": "logos-nix_55",
         "nixpkgs": [
           "nix-bundle-lgx",
           "nix-bundle-dir",
@@ -2193,7 +2296,7 @@
     },
     "nix-bundle-lgx": {
       "inputs": {
-        "logos-nix": "logos-nix_50",
+        "logos-nix": "logos-nix_53",
         "logos-package": "logos-package_4",
         "nix-bundle-dir": "nix-bundle-dir_9",
         "nixpkgs": [
@@ -2218,7 +2321,7 @@
     },
     "nix-bundle-macos-app": {
       "inputs": {
-        "logos-nix": "logos-nix_53",
+        "logos-nix": "logos-nix_56",
         "nix-bundle-dir": [
           "nix-bundle-dir"
         ],
@@ -3024,6 +3127,54 @@
         "type": "github"
       }
     },
+    "nixpkgs_54": {
+      "locked": {
+        "lastModified": 1759036355,
+        "narHash": "sha256-0m27AKv6ka+q270dw48KflE0LwQYrO7Fm4/2//KCVWg=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e9f00bd893984bc8ce46c895c3bf7cac95331127",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_55": {
+      "locked": {
+        "lastModified": 1759036355,
+        "narHash": "sha256-0m27AKv6ka+q270dw48KflE0LwQYrO7Fm4/2//KCVWg=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e9f00bd893984bc8ce46c895c3bf7cac95331127",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_56": {
+      "locked": {
+        "lastModified": 1759036355,
+        "narHash": "sha256-0m27AKv6ka+q270dw48KflE0LwQYrO7Fm4/2//KCVWg=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e9f00bd893984bc8ce46c895c3bf7cac95331127",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs_6": {
       "locked": {
         "lastModified": 1759036355,
@@ -3088,6 +3239,31 @@
         "type": "github"
       }
     },
+    "process-stats": {
+      "inputs": {
+        "logos-cpp-sdk": "logos-cpp-sdk_5",
+        "logos-nix": "logos-nix_15",
+        "nixpkgs": [
+          "logos-liblogos",
+          "process-stats",
+          "logos-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1774384731,
+        "narHash": "sha256-CUSTLW/FZnl3/HjicNTxa0skwWjmLxNzf6tRVOcFkFI=",
+        "owner": "logos-co",
+        "repo": "process-stats",
+        "rev": "1178322d9ea34f3d4b34b75cdad6e05dc1eb9603",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "process-stats",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "logos-capability-module": "logos-capability-module",
@@ -3096,7 +3272,8 @@
         "logos-cpp-sdk": "logos-cpp-sdk_2",
         "logos-design-system": "logos-design-system",
         "logos-liblogos": "logos-liblogos",
-        "logos-nix": "logos-nix_14",
+        "logos-module": "logos-module_4",
+        "logos-nix": "logos-nix_17",
         "logos-package": "logos-package",
         "logos-package-manager": "logos-package-manager",
         "logos-package-manager-ui": "logos-package-manager-ui",
