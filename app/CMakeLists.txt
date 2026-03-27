@@ -244,5 +244,14 @@ add_custom_command(TARGET LogosBasecamp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo "Creating app plugins directory at ${CMAKE_CURRENT_BINARY_DIR}/bin/plugins"
 )
 
+# Build logos_ui_host (out-of-process UI plugin runner)
+add_subdirectory(ui_host)
+
+# Copy logos_ui_host to the same directory as logos_host
+add_custom_command(TARGET LogosBasecamp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:logos_ui_host> ${CMAKE_CURRENT_BINARY_DIR}/logos_ui_host
+    COMMENT "Copying logos_ui_host executable to app directory"
+)
+
 # Add src/main_ui plugin
 # add_subdirectory(${CMAKE_SOURCE_DIR}/src/main_ui)

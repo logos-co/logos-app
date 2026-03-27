@@ -14,6 +14,7 @@
 #include "IComponent.h"
 
 class QQuickWidget;
+class OopPluginHost;
 
 class MainUIBackend : public QObject {
     Q_OBJECT
@@ -76,6 +77,8 @@ public slots:
     void onPluginWindowClosed(const QString& pluginName);
     // Called when the active tab in MdiView changes (for launcher isVisible)
     void setCurrentVisibleApp(const QString& pluginName);
+    // Called when an OOP plugin process crashes
+    void onOopHostCrashed(const QString& pluginName);
 
 signals:
     void currentActiveSectionIndexChanged();
@@ -122,6 +125,9 @@ private:
     QSet<QString> m_loadedApps;
     QString m_currentVisibleApp;
     
+    // Out-of-process UI plugin hosts
+    QMap<QString, OopPluginHost*> m_oopHosts;
+
     // LogosAPI
     LogosAPI* m_logosAPI;
     bool m_ownsLogosAPI;

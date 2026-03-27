@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__qml-inspector__qml_screenshot",
+      "mcp__qml-inspector__qml_find_and_click"
+    ]
+  }
+}

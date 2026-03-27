@@ -24,6 +24,8 @@
 #include "token_manager.h"
 #include "restricted/DenyAllNAMFactory.h"
 #include "restricted/RestrictedUrlInterceptor.h"
+#include "oop/OopPluginHost.h"
+#include "oop/HostingModeResolver.h"
 
 extern "C" {
     char* logos_core_get_module_stats();
@@ -64,6 +66,13 @@ MainUIBackend::MainUIBackend(LogosAPI* logosAPI, QObject* parent)
 
 MainUIBackend::~MainUIBackend()
 {
+    // Stop all OOP hosts first
+    for (auto it = m_oopHosts.begin(); it != m_oopHosts.end(); ++it) {
+        it.value()->stop();
+        it.value()->deleteLater();
+    }
+    m_oopHosts.clear();
+
     QStringList moduleNames = m_loadedUiModules.keys();
     for (const QString& name : m_qmlPluginWidgets.keys()) {
         if (!moduleNames.contains(name)) {
@@ -170,7 +179,7 @@ QVariantList MainUIBackend::uiModules() const
     for (const QString& pluginName : availablePlugins) {
         QVariantMap module;
         module["name"] = pluginName;
-        module["isLoaded"] = m_loadedUiModules.contains(pluginName) || m_qmlPluginWidgets.contains(pluginName);
+        module["isLoaded"] = m_loadedUiModules.contains(pluginName) || m_qmlPluginWidgets.contains(pluginName) || m_oopHosts.contains(pluginName);
         module["isMainUi"] = (pluginName == "main_ui");
         module["iconPath"] = getPluginIconPath(pluginName);
         
@@ -183,13 +192,14 @@ QVariantList MainUIBackend::uiModules() const
 void MainUIBackend::loadUiModule(const QString& moduleName)
 {
     qDebug() << "Loading UI module:" << moduleName;
-    
-    if (m_loadedUiModules.contains(moduleName) || m_qmlPluginWidgets.contains(moduleName)) {
+
+    if (m_loadedUiModules.contains(moduleName) || m_qmlPluginWidgets.contains(moduleName)
+        || m_oopHosts.contains(moduleName)) {
         qDebug() << "Module" << moduleName << "is already loaded";
         activateApp(moduleName);
         return;
     }
-    
+
     // Load core module dependencies from metadata
     QJsonObject metadata = readPluginMetadata(moduleName);
     QJsonArray dependencies = metadata.value("dependencies").toArray();
@@ -206,9 +216,45 @@ void MainUIBackend::loadUiModule(const QString& moduleName)
             }
         }
     }
-    
+
     QString pluginPath = getPluginPath(moduleName);
     qDebug() << "Loading plugin from:" << pluginPath;
+
+    // Check if this plugin should run out-of-process
+    QJsonObject manifest = readPluginManifest(moduleName);
+    HostingMode hostingMode = HostingModeResolver::resolve(moduleName, manifest);
+
+    if (hostingMode != HostingMode::InProcess) {
+        qDebug() << "Loading UI module" << moduleName << "out-of-process, mode:"
+                 << HostingModeResolver::modeName(hostingMode);
+
+        auto* host = new OopPluginHost(moduleName, pluginPath, hostingMode, m_logosAPI, this);
+
+        connect(host, &OopPluginHost::widgetReady, this,
+                [this, moduleName](QWidget* embedWidget) {
+                    m_uiModuleWidgets[moduleName] = embedWidget;
+                    m_loadedApps.insert(moduleName);
+
+                    emit uiModulesChanged();
+                    emit launcherAppsChanged();
+                    emit pluginWindowRequested(embedWidget, moduleName);
+                    emit navigateToApps();
+                });
+
+        connect(host, &OopPluginHost::hostCrashed, this, &MainUIBackend::onOopHostCrashed);
+        connect(host, &OopPluginHost::hostStopped, this, [this](const QString& name) {
+            qDebug() << "OOP UI host stopped for" << name;
+            m_oopHosts.remove(name);
+            m_uiModuleWidgets.remove(name);
+            m_loadedApps.remove(name);
+            emit uiModulesChanged();
+            emit launcherAppsChanged();
+        });
+
+        m_oopHosts[moduleName] = host;
+        host->start();
+        return;
+    }
 
     if (isQmlPlugin(moduleName)) {
         QJsonObject metadata = readQmlPluginMetadata(moduleName);
@@ -326,7 +372,23 @@ void MainUIBackend::loadUiModule(const QString& moduleName)
 void MainUIBackend::unloadUiModule(const QString& moduleName)
 {
     qDebug() << "Unloading UI module:" << moduleName;
-    
+
+    // Handle OOP plugins
+    if (m_oopHosts.contains(moduleName)) {
+        OopPluginHost* host = m_oopHosts.take(moduleName);
+        QWidget* widget = m_uiModuleWidgets.value(moduleName);
+        if (widget)
+            emit pluginWindowRemoveRequested(widget);
+        host->stop();
+        host->deleteLater();
+        m_uiModuleWidgets.remove(moduleName);
+        m_loadedApps.remove(moduleName);
+        emit uiModulesChanged();
+        emit launcherAppsChanged();
+        qDebug() << "Successfully unloaded OOP UI module:" << moduleName;
+        return;
+    }
+
     bool isQml = m_qmlPluginWidgets.contains(moduleName);
     bool isCpp = m_loadedUiModules.contains(moduleName);
 
@@ -393,6 +455,18 @@ void MainUIBackend::onPluginWindowClosed(const QString& pluginName)
 {
     qDebug() << "Plugin window closed:" << pluginName;
 
+    // Handle OOP plugins — stop the child process when the MDI tab is closed
+    if (m_oopHosts.contains(pluginName)) {
+        OopPluginHost* host = m_oopHosts.take(pluginName);
+        host->stop();
+        host->deleteLater();
+        m_uiModuleWidgets.remove(pluginName);
+        m_loadedApps.remove(pluginName);
+        emit uiModulesChanged();
+        emit launcherAppsChanged();
+        return;
+    }
+
     // Called when user closes the plugin window (tab X or subwindow close). The MDI
     // subwindow and plugin widget are already destroyed
     if (m_loadedUiModules.contains(pluginName)) {
@@ -410,6 +484,29 @@ void MainUIBackend::onPluginWindowClosed(const QString& pluginName)
         emit uiModulesChanged();
         emit launcherAppsChanged();
     }
+}
+
+void MainUIBackend::onOopHostCrashed(const QString& pluginName)
+{
+    qWarning() << "OOP UI plugin crashed:" << pluginName;
+
+    // Clean up the host
+    if (m_oopHosts.contains(pluginName)) {
+        OopPluginHost* host = m_oopHosts.take(pluginName);
+        QWidget* widget = m_uiModuleWidgets.value(pluginName);
+        if (widget)
+            emit pluginWindowRemoveRequested(widget);
+        host->deleteLater();
+    }
+
+    m_uiModuleWidgets.remove(pluginName);
+    m_loadedApps.remove(pluginName);
+
+    emit uiModulesChanged();
+    emit launcherAppsChanged();
+
+    // TODO: Could auto-restart or fall back to in-process here
+    qDebug() << "OOP UI plugin" << pluginName << "cleaned up after crash";
 }
 
 QVariantList MainUIBackend::coreModules() const

@@ -202,6 +202,12 @@ pkgs.stdenv.mkDerivation rec {
       echo "Installed logos_host binary"
     fi
 
+    # Install logos_ui_host (out-of-process UI plugin runner)
+    if [ -f "build/ui_host/logos_ui_host" ]; then
+      cp build/ui_host/logos_ui_host "$out/bin/"
+      echo "Installed logos_ui_host binary"
+    fi
+
     # Copy required shared libraries from liblogos
     if ls "${logosLiblogos}/lib/"liblogos_core.* >/dev/null 2>&1; then
       cp -L "${logosLiblogos}/lib/"liblogos_core.* "$out/lib/" || true

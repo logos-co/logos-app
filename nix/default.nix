@@ -14,8 +14,8 @@
   ];
   
   # Common runtime dependencies
-  buildInputs = [ 
-    pkgs.qt6.qtbase 
+  buildInputs = [
+    pkgs.qt6.qtbase
     pkgs.qt6.qtremoteobjects
     pkgs.qt6.qtdeclarative
     pkgs.zstd
@@ -23,6 +23,8 @@
     pkgs.abseil-cpp
     pkgs.zlib
     pkgs.icu
+  ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+    pkgs.qt6.qtwayland
   ];
   
   # Common CMake flags

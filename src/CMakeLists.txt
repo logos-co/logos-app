@@ -8,7 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Find Qt packages
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets RemoteObjects Quick Qml QuickWidgets QuickControls2)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets RemoteObjects Quick Qml QuickWidgets QuickControls2 Network)
 
 # Allow override from environment or command line (for nix builds)
 if(NOT DEFINED LOGOS_CPP_SDK_ROOT)
@@ -107,7 +107,25 @@ set(SOURCES
     mdichild.cpp
     mdiview.cpp
     main_ui_resources.qrc
+    oop/EmbedControlChannel.cpp
+    oop/HostingModeResolver.cpp
+    oop/OopEmbedWidget.cpp
+    oop/OopPluginHost.cpp
 )
+
+# Platform-specific OOP embedding backends
+if(UNIX AND NOT APPLE)
+    list(APPEND SOURCES oop/backends/X11EmbedWidget.cpp)
+    # Wayland compositor backend (optional — requires Qt6::WaylandCompositor)
+    find_package(Qt6 OPTIONAL_COMPONENTS WaylandCompositor)
+    if(Qt6WaylandCompositor_FOUND)
+        list(APPEND SOURCES oop/backends/WaylandEmbedWidget.cpp)
+    endif()
+elseif(APPLE)
+    list(APPEND SOURCES oop/backends/MacEmbedWidget.mm)
+elseif(WIN32)
+    list(APPEND SOURCES oop/backends/WinEmbedWidget.cpp)
+endif()
 
 # Add SDK sources based on layout type
 if(_cpp_sdk_is_source)
@@ -232,6 +250,13 @@ target_compile_definitions(main_ui PRIVATE
     QT_DEPRECATED_WARNINGS
 )
 
+# Wayland compositor support (Linux only)
+if(Qt6WaylandCompositor_FOUND)
+    target_compile_definitions(main_ui PRIVATE HAS_WAYLAND_COMPOSITOR)
+    target_link_libraries(main_ui PRIVATE Qt6::WaylandCompositor)
+    message(STATUS "Wayland compositor support enabled for OOP UI plugins")
+endif()
+
 # Add distributed build flag if enabled
 if(LOGOS_DISTRIBUTED_BUILD)
     target_compile_definitions(main_ui PRIVATE LOGOS_DISTRIBUTED_BUILD)
@@ -243,15 +268,16 @@ if(LOGOS_PORTABLE_BUILD)
     message(STATUS "Building main_ui as portable (LOGOS_PORTABLE_BUILD enabled)")
 endif()
 
-target_link_libraries(main_ui 
-    PRIVATE 
-        Qt6::Core 
+target_link_libraries(main_ui
+    PRIVATE
+        Qt6::Core
         Qt6::Widgets
         Qt6::RemoteObjects
         Qt6::Quick
         Qt6::Qml
         Qt6::QuickWidgets
         Qt6::QuickControls2
+        Qt6::Network
         component-interfaces
 )
 
