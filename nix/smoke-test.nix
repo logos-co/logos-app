@@ -9,10 +9,10 @@
 # If the app crashes it exits immediately — the timeout is only ever waited out
 # on the happy path (app stays alive and healthy).
 #
-# The logos-basecamp launcher script (bin/logos-basecamp) already bakes in the correct
-# QT_PLUGIN_PATH and LD_LIBRARY_PATH at build time, so we only need to add
-# the offscreen platform plugin and GL stubs on Linux.
-{ pkgs, appPkg, appBin ? "${appPkg}/bin/logos-basecamp", timeoutSec ? 5 }:
+# The LogosBasecamp launcher (bin/LogosBasecamp) bakes in the correct
+# QT_PLUGIN_PATH and LD_LIBRARY_PATH at build time for dev builds.
+# We only need to add the offscreen platform plugin and GL stubs on Linux.
+{ pkgs, appPkg, appBin ? "${appPkg}/bin/LogosBasecamp", timeoutSec ? 5 }:
 
 pkgs.runCommand "logos-basecamp-smoke-test" {
   nativeBuildInputs = [ pkgs.coreutils ]

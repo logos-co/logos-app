@@ -94,8 +94,8 @@ pkgs.stdenv.mkDerivation rec {
   # This is an aggregate runtime layout; avoid stripping to prevent hook errors
   dontStrip = true;
 
-  # Skip wrapQtApps: wrapper renames binary to .LogosBasecamp-wrapped; macOS Dock uses executable filename
-  # We create a custom launcher that execs the binary (keeps process name "LogosBasecamp")
+  # Skip wrapQtApps: we create our own wrapper for dev builds (hidden binary + shell launcher)
+  # and portable builds don't need wrapping (nix-bundle-dir handles Qt paths)
   dontWrapQtApps = true;
 
   # Additional environment variables for Qt and RPATH cleanup
@@ -115,7 +115,7 @@ pkgs.stdenv.mkDerivation rec {
           patchelf --remove-rpath "$1" 2>/dev/null || true
         fi
         # Set proper RPATH for the main binary
-        if echo "$1" | grep -q "/LogosBasecamp$"; then
+        if echo "$1" | grep -qE "/\.?LogosBasecamp$"; then
           echo "Setting RPATH for $1"
           patchelf --set-rpath "$out/lib" "$1" 2>/dev/null || true
         fi
@@ -187,10 +187,33 @@ pkgs.stdenv.mkDerivation rec {
     # Create output directories
     mkdir -p $out/bin $out/lib $out/modules $out/plugins
 
-    # Install our app binary (real binary, so Qt hook can wrap it)
+    # Install app binary
     if [ -f "build/LogosBasecamp" ]; then
-      cp build/LogosBasecamp "$out/bin/LogosBasecamp"
-      echo "Installed LogosBasecamp binary"
+      ${if portable then ''
+        # Portable: install binary directly (nix-bundle-dir handles Qt paths)
+        cp build/LogosBasecamp "$out/bin/LogosBasecamp"
+      '' else ''
+        # Dev: hide real binary, create wrapper that sets Qt env vars
+        cp build/LogosBasecamp "$out/bin/.LogosBasecamp"
+
+        cat > $out/bin/LogosBasecamp << 'WRAPPER_EOF'
+#!/bin/sh
+BINDIR="$(cd "$(dirname "$0")" && pwd)"
+APPDIR="$(cd "$BINDIR/.." && pwd)"
+WRAPPER_EOF
+        echo "export QT_PLUGIN_PATH=\"${qtPluginPath}\"" >> $out/bin/LogosBasecamp
+        echo "export QML2_IMPORT_PATH=\"${qmlImportPath}\"" >> $out/bin/LogosBasecamp
+        echo "export DYLD_LIBRARY_PATH=\"${qtLibPath}:\$DYLD_LIBRARY_PATH\"" >> $out/bin/LogosBasecamp
+        echo "export LD_LIBRARY_PATH=\"${qtLibPath}:\$LD_LIBRARY_PATH\"" >> $out/bin/LogosBasecamp
+        cat >> $out/bin/LogosBasecamp << 'WRAPPER_EOF'
+if [ "$(uname)" = "Linux" ]; then
+  export XDG_DATA_DIRS="$APPDIR/share''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+fi
+exec "$BINDIR/.LogosBasecamp" "$@"
+WRAPPER_EOF
+        chmod +x $out/bin/LogosBasecamp
+      ''}
+      echo "Installed LogosBasecamp"
     fi
 
     # Install ui-host binary from logos-view-module-runtime (process-isolated UI plugins)
@@ -252,21 +275,6 @@ pkgs.stdenv.mkDerivation rec {
       cp ${src}/app/icons/logos.png $out/share/icons/hicolor/256x256/apps/logos-basecamp.png
     fi
 
-    # Create launcher script (sets Qt env, execs binary - process name stays "LogosBasecamp" for Dock)
-    cat > $out/bin/logos-basecamp << 'EOF'
-#!/bin/sh
-EOF
-    echo "export QT_PLUGIN_PATH=\"${qtPluginPath}\"" >> $out/bin/logos-basecamp
-    echo "export QML2_IMPORT_PATH=\"${qmlImportPath}\"" >> $out/bin/logos-basecamp
-    echo "export DYLD_LIBRARY_PATH=\"${qtLibPath}:\$DYLD_LIBRARY_PATH\"" >> $out/bin/logos-basecamp
-    echo "export LD_LIBRARY_PATH=\"${qtLibPath}:\$LD_LIBRARY_PATH\"" >> $out/bin/logos-basecamp
-    echo 'APPDIR="$(cd "$(dirname "$0")/.." && pwd)"' >> $out/bin/logos-basecamp
-    echo 'if [ "$(uname)" = "Linux" ]; then' >> $out/bin/logos-basecamp
-    echo '  export XDG_DATA_DIRS="$APPDIR/share''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"' >> $out/bin/logos-basecamp
-    echo 'fi' >> $out/bin/logos-basecamp
-    echo 'exec "$(dirname "$0")/LogosBasecamp" "$@"' >> $out/bin/logos-basecamp
-    chmod +x $out/bin/logos-basecamp
-
     # Create a README for reference
     cat > $out/README.txt <<EOF
 Logos App - Build Information
@@ -276,7 +284,7 @@ cpp-sdk: ${logosSdk}
 logos-design-system: ${logosDesignSystem}
 
 Runtime Layout:
-- Binary: $out/bin/LogosBasecamp
+- Entry point: $out/bin/LogosBasecamp
 - Libraries: $out/lib
 - Embedded modules: $out/modules (pre-installed at build time)
 - Embedded plugins: $out/plugins (pre-installed at build time)

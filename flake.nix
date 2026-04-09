@@ -208,7 +208,7 @@
 
           # Full logos-qt-mcp package (includes test-framework, mcp-server, qt-plugin)
           # Use: nix build .#logos-qt-mcp -o result-mcp
-          # Then: LOGOS_QT_MCP=./result-mcp node tests/ui-tests.mjs --ci ./result/bin/logos-basecamp
+          # Then: LOGOS_QT_MCP=./result-mcp node tests/ui-tests.mjs --ci ./result/bin/LogosBasecamp
           logos-qt-mcp = logosQtMcp;
 
           # Smoke test (also exposed as a package so it can be built standalone)

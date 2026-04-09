@@ -14,7 +14,7 @@ The local build produces a standard Nix derivation whose dependencies live in `/
 
 ```bash
 nix build '.#app'
-./result/bin/logos-basecamp
+./result/bin/LogosBasecamp
 ```
 
 Local builds require **local** `.lgx` packages, generated with:
@@ -176,7 +176,7 @@ nix build
 nix build .#logos-qt-mcp -o result-mcp
 
 # Run headless (launches the app, runs tests, kills the app):
-node tests/ui-tests.mjs --ci ./result/bin/logos-basecamp
+node tests/ui-tests.mjs --ci ./result/bin/LogosBasecamp
 
 # Or run against an already-running app:
 node tests/ui-tests.mjs

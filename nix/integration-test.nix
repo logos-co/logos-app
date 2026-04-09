@@ -3,7 +3,7 @@
 # and runs UI tests (click buttons, verify text, etc.).
 #
 # Requires Node.js for the test runner and the Qt offscreen platform plugin.
-{ pkgs, src, appPkg, logosQtMcp, appBin ? "${appPkg}/bin/logos-basecamp", timeoutSec ? 120 }:
+{ pkgs, src, appPkg, logosQtMcp, appBin ? "${appPkg}/bin/LogosBasecamp", timeoutSec ? 120 }:
 
 pkgs.runCommand "logos-basecamp-integration-test" {
   nativeBuildInputs = [ pkgs.coreutils pkgs.nodejs ]

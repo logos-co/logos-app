@@ -468,7 +468,7 @@ All directory paths are managed via the `LogosBasecampPaths` utility class.
 
 | Artifact | Description |
 |----------|-------------|
-| `bin/logos-basecamp` | Main application executable |
+| `bin/LogosBasecamp` | Main application executable |
 | `lib/liblogos_core.{so,dylib}` | Core library (from logos-liblogos) |
 | `bin/logos_host` | Module subprocess host (from logos-liblogos) |
 | `modules/` | Embedded Logos Module bundles |
@@ -495,7 +495,7 @@ Nix provides reproducible builds with all dependencies managed automatically.
 nix build
 ```
 
-The result includes the application binary at `result/bin/logos-basecamp` with all embedded modules.
+The result includes the application binary at `result/bin/LogosBasecamp` with all embedded modules.
 
 **Build individual outputs:**
 
@@ -516,7 +516,7 @@ nix build '.#smoke-test' -L
 
 # Integration tests
 nix build '.#logos-qt-mcp' -o result-mcp
-node tests/ui-tests.mjs --ci ./result/bin/logos-basecamp
+node tests/ui-tests.mjs --ci ./result/bin/LogosBasecamp
 ```
 
 **Development shell:**
@@ -608,7 +608,7 @@ End-to-end UI tests using the `logos-qt-mcp` framework:
 
 ```bash
 nix build '.#logos-qt-mcp' -o result-mcp
-node tests/ui-tests.mjs --ci ./result/bin/logos-basecamp
+node tests/ui-tests.mjs --ci ./result/bin/LogosBasecamp
 ```
 
 ### QML Inspector

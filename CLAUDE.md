@@ -12,7 +12,7 @@ nix build
 ./run-dev.sh
 
 # Build + run directly
-nix build && ./result/bin/logos-basecamp
+nix build && ./result/bin/LogosBasecamp
 ```
 
 ## Testing
@@ -28,7 +28,7 @@ nix build .#logos-qt-mcp -o result-mcp
 node tests/ui-tests.mjs
 
 # UI integration tests headless (CI mode)
-node tests/ui-tests.mjs --ci ./result/bin/logos-basecamp
+node tests/ui-tests.mjs --ci ./result/bin/LogosBasecamp
 
 # Hermetic CI test via Nix
 nix build .#integration-test -L

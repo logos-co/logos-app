@@ -41,10 +41,7 @@ echo "================================================"
 echo ""
 
 # Run the app from the nix result
-# Use logos-basecamp launcher (sets Qt env, execs LogosBasecamp binary - Dock shows "LogosBasecamp")
-if [ -f "./result/bin/logos-basecamp" ]; then
-    ./result/bin/logos-basecamp "$@"
-elif [ -f "./result/bin/LogosBasecamp" ]; then
+if [ -f "./result/bin/LogosBasecamp" ]; then
     ./result/bin/LogosBasecamp "$@"
 else
     echo "Error: Application binary not found in ./result/bin/"
