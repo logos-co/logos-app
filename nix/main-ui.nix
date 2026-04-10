@@ -1,5 +1,5 @@
 # Builds the main UI plugin
-{ pkgs, common, src, logosSdk, logosModule, logosPackageManagerModule, logosLiblogos, distributed ? false }:
+{ pkgs, common, src, logosSdk, logosModule, logosPackageManagerModule, logosLiblogos, logosViewModuleRuntime, distributed ? false }:
 
 pkgs.stdenv.mkDerivation {
   pname = "${common.pname}-main-ui-plugin";
@@ -102,7 +102,8 @@ pkgs.stdenv.mkDerivation {
       -DLOGOS_PORTABLE_BUILD=${if distributed then "ON" else "OFF"} \
       -DLOGOS_CPP_SDK_ROOT=$(pwd)/logos-cpp-sdk \
       -DLOGOS_MODULE_ROOT=${logosModule} \
-      -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos}
+      -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos} \
+      -DLOGOS_VIEW_MODULE_RUNTIME_ROOT=${logosViewModuleRuntime}
     
     runHook postConfigure
   '';

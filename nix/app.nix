@@ -1,5 +1,5 @@
 # Builds the logos-basecamp standalone application
-{ pkgs, common, src, logosModule, logosLiblogos, logosSdk, logosDesignSystem, logosQtMcp ? null, installedModules ? [], portable ? false, enableInspector ? true }:
+{ pkgs, common, src, logosModule, logosLiblogos, logosSdk, logosDesignSystem, logosViewModuleRuntime, logosQtMcp ? null, installedModules ? [], portable ? false, enableInspector ? true }:
 
 let
   # webkitgtk became ABI-versioned; pick the newest available while staying
@@ -164,6 +164,7 @@ pkgs.stdenv.mkDerivation rec {
       -DLOGOS_MODULE_ROOT=${logosModule} \
       -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos} \
       -DLOGOS_CPP_SDK_ROOT=$(pwd)/logos-cpp-sdk \
+      -DLOGOS_VIEW_MODULE_RUNTIME_ROOT=${logosViewModuleRuntime} \
       -DLOGOS_PORTABLE_BUILD=${if portable then "ON" else "OFF"} \
       -DENABLE_QML_INSPECTOR=${if enableInspector then "ON" else "OFF"} \
       ${pkgs.lib.optionalString (enableInspector && logosQtMcp != null) "-DLOGOS_QT_MCP_ROOT=$(pwd)/logos-qt-mcp"}
@@ -190,6 +191,12 @@ pkgs.stdenv.mkDerivation rec {
     if [ -f "build/LogosBasecamp" ]; then
       cp build/LogosBasecamp "$out/bin/LogosBasecamp"
       echo "Installed LogosBasecamp binary"
+    fi
+
+    # Install ui-host binary from logos-view-module-runtime (process-isolated UI plugins)
+    if [ -f "${logosViewModuleRuntime}/bin/ui-host" ]; then
+      cp "${logosViewModuleRuntime}/bin/ui-host" "$out/bin/ui-host"
+      echo "Installed ui-host binary from logos-view-module-runtime"
     fi
 
     # Copy the core binaries from liblogos

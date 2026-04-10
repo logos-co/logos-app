@@ -18,6 +18,11 @@
     logos-design-system.url = "github:logos-co/logos-design-system";
     logos-counter-qml.url = "github:logos-co/counter_qml";
     logos-counter.url = "github:logos-co/counter";
+    logos-view-module-runtime = {
+      url = "github:logos-co/logos-view-module-runtime";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.logos-cpp-sdk.follows = "logos-cpp-sdk";
+    };
     nix-bundle-logos-module-install.url = "github:logos-co/nix-bundle-logos-module-install";
     nix-bundle-dir.url = "github:logos-co/nix-bundle-dir";
     logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
@@ -29,7 +34,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-module, logos-liblogos, logos-package-manager, logos-package-manager-module, logos-package-downloader-module, logos-capability-module, logos-package, logos-package-manager-ui, logos-webview-app, logos-design-system, logos-counter-qml, logos-counter, logos-qt-mcp, nix-bundle-logos-module-install, nix-bundle-dir, nix-bundle-appimage, nix-bundle-macos-app }:
+  outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-module, logos-liblogos, logos-package-manager, logos-package-manager-module, logos-package-downloader-module, logos-capability-module, logos-package, logos-package-manager-ui, logos-webview-app, logos-design-system, logos-counter-qml, logos-counter, logos-view-module-runtime, logos-qt-mcp, nix-bundle-logos-module-install, nix-bundle-dir, nix-bundle-appimage, nix-bundle-macos-app }:
     let
       systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
@@ -52,6 +57,7 @@
         logosDesignSystem = logos-design-system.packages.${system}.default;
         logosCounterQml = logos-counter-qml.packages.${system}.default;
         logosCounter = logos-counter.packages.${system}.default;
+        logosViewModuleRuntime = logos-view-module-runtime.packages.${system}.default;
         logosQtMcp = logos-qt-mcp.packages.${system}.default;
         logosCppSdkSrc = logos-cpp-sdk.outPath;
         logosLiblogosSrc = logos-liblogos.outPath;
@@ -63,7 +69,7 @@
       });
     in
     {
-      packages = forAllSystems ({ pkgs, system, logosSdk, logosModule, logosLiblogos, logosLiblogosPortable, logosPackageManagerLibrary, logosPackageManagerModule, logosPackageManagerModuleLib, logosPackageManagerModuleLibPortable, logosPackageDownloaderModule, logosPackageDownloaderModuleLib, logosPackageLib, logosPackageManagerUI, logosCapabilityModule, logosWebviewApp, logosDesignSystem, logosCounterQml, logosCounter, logosQtMcp, installDev, installPortable, dirBundler, ... }:
+      packages = forAllSystems ({ pkgs, system, logosSdk, logosModule, logosLiblogos, logosLiblogosPortable, logosPackageManagerLibrary, logosPackageManagerModule, logosPackageManagerModuleLib, logosPackageManagerModuleLibPortable, logosPackageDownloaderModule, logosPackageDownloaderModuleLib, logosPackageLib, logosPackageManagerUI, logosCapabilityModule, logosWebviewApp, logosDesignSystem, logosCounterQml, logosCounter, logosViewModuleRuntime, logosQtMcp, installDev, installPortable, dirBundler, ... }:
         let
           # Common configuration
           common = import ./nix/default.nix {
@@ -75,14 +81,14 @@
           counterPlugin = logosCounter;
           counterQmlPlugin = logosCounterQml;
           mainUIPlugin = import ./nix/main-ui.nix {
-            inherit pkgs common src logosSdk logosModule logosPackageManagerModule logosLiblogos;
+            inherit pkgs common src logosSdk logosModule logosPackageManagerModule logosLiblogos logosViewModuleRuntime;
           };
           packageManagerUIPlugin = logosPackageManagerUI;
           webviewAppPlugin = logosWebviewApp;
 
           # Plugin packages (distributed builds for DMG/AppImage)
           mainUIPluginDistributed = import ./nix/main-ui.nix {
-            inherit pkgs common src logosSdk logosModule logosPackageManagerModule logosLiblogos;
+            inherit pkgs common src logosSdk logosModule logosPackageManagerModule logosLiblogos logosViewModuleRuntime;
             distributed = true;
           };
 
@@ -112,7 +118,7 @@
 
           # App package (development build)
           app = import ./nix/app.nix {
-            inherit pkgs common src logosModule logosLiblogos logosSdk logosDesignSystem;
+            inherit pkgs common src logosModule logosLiblogos logosSdk logosDesignSystem logosViewModuleRuntime;
             inherit logosQtMcp;
             installedModules = installedDev;
           };
@@ -120,7 +126,7 @@
           # App package (distributed build for DMG/AppImage)
           # Uses portable-compiled liblogos for portable variant selection
           appDistributed = import ./nix/app.nix {
-            inherit pkgs common src logosModule logosSdk logosDesignSystem;
+            inherit pkgs common src logosModule logosSdk logosDesignSystem logosViewModuleRuntime;
             logosLiblogos = logosLiblogosPortable;
             installedModules = installedDistributed;
             portable = true;
@@ -144,7 +150,7 @@
 
           # Distributed build with inspector enabled (for macOS integration tests)
           appDistributedWithInspector = import ./nix/app.nix {
-            inherit pkgs common src logosModule logosSdk logosDesignSystem;
+            inherit pkgs common src logosModule logosSdk logosDesignSystem logosViewModuleRuntime;
             inherit logosQtMcp;
             logosLiblogos = logosLiblogosPortable;
             installedModules = installedDistributed;

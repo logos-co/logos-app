@@ -21,9 +21,13 @@
 #include <QStandardPaths>
 #include <QPointer>
 #include <QFileDialog>
-#include "LogosQmlBridge.h"
+#include <memory>
+#include <LogosQmlBridge.h>
+#include <ViewModuleHost.h>
 #include "logos_sdk.h"
 #include "token_manager.h"
+#include "restricted/DenyAllNAMFactory.h"
+#include "restricted/RestrictedUrlInterceptor.h"
 
 extern "C" {
     char* logos_core_get_module_stats();
@@ -195,28 +199,12 @@ void MainUIBackend::loadUiModule(const QString& moduleName)
         return;
     }
 
-    if (m_pluginLoader->isLoading(moduleName)) {
-        qDebug() << "Module" << moduleName << "is already loading";
+    if (isQmlPlugin(moduleName)) {
+        loadQmlUiModule(moduleName, m_uiPluginMetadata.value(moduleName));
         return;
     }
 
-    PluginLoadRequest request;
-    request.name = moduleName;
-    request.isQml = isQmlPlugin(moduleName);
-    request.pluginPath = getPluginPath(moduleName);
-    request.iconPath = getPluginIconPath(moduleName, true);
-
-    if (request.isQml) {
-        request.qmlFilePath = m_uiPluginMetadata.contains(moduleName)
-            ? m_uiPluginMetadata[moduleName].value("mainFilePath").toString()
-            : QDir(request.pluginPath).filePath("Main.qml");
-    }
-
-    if (m_uiPluginMetadata.contains(moduleName)) {
-        request.coreDependencies = m_uiPluginMetadata[moduleName].value("dependencies").toList();
-    }
-
-    m_pluginLoader->load(request);
+    loadLegacyUiModule(moduleName);
 }
 
 void MainUIBackend::onPluginLoaded(const QString& name, QWidget* widget,
@@ -244,7 +232,10 @@ void MainUIBackend::onPluginLoadFailed(const QString& name, const QString& error
 
 QStringList MainUIBackend::loadingModules() const
 {
-    return m_pluginLoader->loadingPlugins();
+    QStringList loading = m_pluginLoader->loadingPlugins();
+    for (const QString& name : m_loadingQmlModules)
+        loading.append(name);
+    return loading;
 }
 
 void MainUIBackend::unloadUiModule(const QString& moduleName)
@@ -274,14 +265,20 @@ void MainUIBackend::unloadUiModule(const QString& moduleName)
         widget->deleteLater();
     }
     
+    // Stop view module host process if this was a view module
+    if (m_viewModuleHosts.contains(moduleName)) {
+        m_viewModuleHosts[moduleName]->stop();
+        delete m_viewModuleHosts.take(moduleName);
+    }
+
     m_loadedUiModules.remove(moduleName);
     m_uiModuleWidgets.remove(moduleName);
     m_qmlPluginWidgets.remove(moduleName);
     m_loadedApps.remove(moduleName);
-    
+
     emit uiModulesChanged();
     emit launcherAppsChanged();
-    
+
     qDebug() << "Successfully unloaded UI module:" << moduleName;
 }
 
@@ -323,6 +320,12 @@ void MainUIBackend::onPluginWindowClosed(const QString& pluginName)
         emit uiModulesChanged();
         emit launcherAppsChanged();
     } else if (m_qmlPluginWidgets.contains(pluginName)) {
+        // Stop view module host process if applicable
+        if (m_viewModuleHosts.contains(pluginName)) {
+            m_viewModuleHosts[pluginName]->stop();
+            delete m_viewModuleHosts.take(pluginName);
+        }
+
         m_qmlPluginWidgets.remove(pluginName);
         m_uiModuleWidgets.remove(pluginName);
         m_loadedApps.remove(pluginName);
@@ -540,7 +543,187 @@ QString MainUIBackend::getPluginType(const QString& name) const
 
 bool MainUIBackend::isQmlPlugin(const QString& name) const
 {
-    return getPluginType(name) == "ui_qml";
+    return getPluginType(name) == QStringLiteral("ui_qml");
+}
+
+QString MainUIBackend::resolveQmlViewPath(const QVariantMap& meta) const
+{
+    // ui_qml contract: "view" is the QML entry point, relative to installDir.
+    const QString installDir = meta.value("installDir").toString();
+    const QString viewField = meta.value("view").toString();
+    if (viewField.isEmpty()) return QString();
+    return QDir(installDir).filePath(viewField);
+}
+
+void MainUIBackend::loadQmlUiModule(const QString& moduleName, const QVariantMap& meta)
+{
+    if (m_loadingQmlModules.contains(moduleName)) {
+        qDebug() << "ui_qml module" << moduleName << "is already loading";
+        return;
+    }
+
+    const QString installDir = meta.value("installDir").toString();
+    const QString qmlViewPath = resolveQmlViewPath(meta);
+    if (qmlViewPath.isEmpty() || !QFile::exists(qmlViewPath)) {
+        qWarning() << "ui_qml module QML file not found:" << qmlViewPath;
+        return;
+    }
+
+    m_loadingQmlModules.insert(moduleName);
+    emit loadingModulesChanged();
+
+    LogosQmlBridge* bridge = new LogosQmlBridge(m_logosAPI, this);
+    if (!hasBackendPlugin(moduleName)) {
+        loadQmlView(moduleName, installDir, qmlViewPath, bridge, nullptr);
+        return;
+    }
+
+    const QString pluginSoPath = meta.value("mainFilePath").toString();
+    auto* viewHost = new ViewModuleHost(this);
+    if (!viewHost->spawn(moduleName, pluginSoPath)) {
+        qWarning() << "Failed to spawn ui-host for ui_qml module" << moduleName;
+        delete viewHost;
+        delete bridge;
+        m_loadingQmlModules.remove(moduleName);
+        emit loadingModulesChanged();
+        return;
+    }
+
+    auto onHostReady = [this, moduleName, installDir, qmlViewPath,
+                        pluginSoPath, bridge, viewHost]() {
+        bridge->setViewModuleSocket(moduleName, viewHost->socketName());
+
+        const QString base = QFileInfo(pluginSoPath).absolutePath()
+            + QStringLiteral("/") + moduleName
+            + QStringLiteral("_replica_factory");
+        for (const QString& suffix : { QStringLiteral(".dylib"),
+                                       QStringLiteral(".so"),
+                                       QStringLiteral(".dll") }) {
+            const QString factoryPath = base + suffix;
+            if (QFile::exists(factoryPath)) {
+                bridge->setViewReplicaPlugin(moduleName, factoryPath);
+                break;
+            }
+        }
+        loadQmlView(moduleName, installDir, qmlViewPath, bridge, viewHost);
+    };
+
+    auto* timeout = new QTimer(this);
+    timeout->setSingleShot(true);
+    auto readyConn = std::make_shared<QMetaObject::Connection>();
+    auto timeoutConn = std::make_shared<QMetaObject::Connection>();
+    *readyConn = connect(viewHost, &ViewModuleHost::ready, this,
+        [timeout, readyConn, timeoutConn, onHostReady]() {
+            QObject::disconnect(*readyConn);
+            QObject::disconnect(*timeoutConn);
+            timeout->stop();
+            timeout->deleteLater();
+            onHostReady();
+        });
+    *timeoutConn = connect(timeout, &QTimer::timeout, this,
+        [this, moduleName, viewHost, bridge, timeout, readyConn, timeoutConn]() {
+            QObject::disconnect(*readyConn);
+            QObject::disconnect(*timeoutConn);
+            timeout->deleteLater();
+            qWarning() << "Timeout waiting for ui-host ready signal for" << moduleName;
+            viewHost->stop();
+            viewHost->deleteLater();
+            delete bridge;
+            m_loadingQmlModules.remove(moduleName);
+            emit loadingModulesChanged();
+        });
+    timeout->start(30000);
+}
+
+void MainUIBackend::loadLegacyUiModule(const QString& moduleName)
+{
+    if (m_pluginLoader->isLoading(moduleName)) {
+        qDebug() << "Module" << moduleName << "is already loading";
+        return;
+    }
+
+    PluginLoadRequest request;
+    request.name = moduleName;
+    request.isQml = false;
+    request.pluginPath = getPluginPath(moduleName);
+    request.iconPath = getPluginIconPath(moduleName, true);
+    if (m_uiPluginMetadata.contains(moduleName)) {
+        request.coreDependencies = m_uiPluginMetadata[moduleName].value("dependencies").toList();
+    }
+
+    m_pluginLoader->load(request);
+}
+
+void MainUIBackend::loadQmlView(const QString& moduleName,
+                                const QString& installDir,
+                                const QString& qmlViewPath,
+                                LogosQmlBridge* bridge,
+                                ViewModuleHost* viewHost)
+{
+    QQuickWidget* qmlWidget = new QQuickWidget;
+    qmlWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    if (QQmlEngine* engine = qmlWidget->engine()) {
+        // Start with Qt's default import/plugin paths so standard Qt QML
+        // modules (QtRemoteObjects, QtQuick.Controls, etc.) remain available.
+        // The sandbox restricts network + filesystem, not Qt APIs.
+        QStringList importPaths = engine->importPathList();
+        importPaths.prepend(installDir);
+        engine->setImportPathList(importPaths);
+
+        // Restrict native plugin search to Qt system paths + the plugin's own
+        // directory so ui_qml views cannot load arbitrary C++ plugins.
+        QStringList pluginPaths = engine->pluginPathList();
+        pluginPaths.prepend(installDir);
+        engine->setPluginPathList(pluginPaths);
+
+        engine->setNetworkAccessManagerFactory(new DenyAllNAMFactory());
+        QStringList allowedRoots; allowedRoots << installDir;
+        engine->addUrlInterceptor(new RestrictedUrlInterceptor(allowedRoots));
+        engine->setBaseUrl(QUrl::fromLocalFile(installDir + "/"));
+    }
+
+    // Reparent the bridge under the widget so its lifetime tracks it.
+    bridge->setParent(qmlWidget);
+    qmlWidget->rootContext()->setContextProperty("logos", bridge);
+    qmlWidget->setSource(QUrl::fromLocalFile(qmlViewPath));
+    qmlWidget->setWindowIcon(QIcon(getPluginIconPath(moduleName, true)));
+
+    if (qmlWidget->status() == QQuickWidget::Error) {
+        qWarning() << "Failed to load ui_qml view" << moduleName;
+        const auto errors = qmlWidget->errors();
+        for (const QQmlError& error : errors) qWarning() << error.toString();
+        qmlWidget->deleteLater();
+        if (viewHost) { viewHost->stop(); delete viewHost; }
+        m_loadingQmlModules.remove(moduleName);
+        emit loadingModulesChanged();
+        return;
+    }
+
+    if (viewHost) m_viewModuleHosts[moduleName] = viewHost;
+    m_qmlPluginWidgets[moduleName] = qmlWidget;
+    m_uiModuleWidgets[moduleName] = qmlWidget;
+    m_loadedApps.insert(moduleName);
+    m_loadingQmlModules.remove(moduleName);
+
+    emit loadingModulesChanged();
+    emit uiModulesChanged();
+    emit launcherAppsChanged();
+    emit pluginWindowRequested(qmlWidget, moduleName);
+    emit navigateToApps();
+    qDebug() << "Successfully loaded ui_qml module:" << moduleName;
+}
+
+bool MainUIBackend::hasBackendPlugin(const QString& name) const
+{
+    // True iff the ui_qml plugin ships a backend Qt plugin lib alongside its
+    // QML view. For QML-only ui_qml modules, mainFilePath is empty (no
+    // backend). When a backend is present, mainFilePath points at the .so/.dylib.
+    if (!isQmlPlugin(name)) return false;
+    const QString mainPath = m_uiPluginMetadata.value(name).value("mainFilePath").toString();
+    if (mainPath.isEmpty()) return false;
+    return mainPath.endsWith(QStringLiteral(".so"), Qt::CaseInsensitive)
+        || mainPath.endsWith(QStringLiteral(".dylib"), Qt::CaseInsensitive)
+        || mainPath.endsWith(QStringLiteral(".dll"), Qt::CaseInsensitive);
 }
 
 QStringList MainUIBackend::findAvailableUiPlugins() const
@@ -560,10 +743,17 @@ void MainUIBackend::fetchUiPluginMetadata()
         for (const QVariant& item : uiPlugins) {
             QVariantMap pluginInfo = item.toMap();
             QString name = pluginInfo.value("name").toString();
-            QString mainFilePath = pluginInfo.value("mainFilePath").toString();
-            if (!name.isEmpty() && !mainFilePath.isEmpty()) {
-                self->m_uiPluginMetadata[name] = pluginInfo;
+            if (name.isEmpty()) continue;
+
+            // ui_qml requires "view" (the QML entry point); "main" is optional.
+            // Other types require "mainFilePath" (the backend lib).
+            const QString type = pluginInfo.value("type").toString();
+            if (type == QStringLiteral("ui_qml")) {
+                if (pluginInfo.value("view").toString().isEmpty()) continue;
+            } else {
+                if (pluginInfo.value("mainFilePath").toString().isEmpty()) continue;
             }
+            self->m_uiPluginMetadata[name] = pluginInfo;
         }
         emit self->uiModulesChanged();
         emit self->launcherAppsChanged();
@@ -572,16 +762,11 @@ void MainUIBackend::fetchUiPluginMetadata()
 
 QString MainUIBackend::getPluginPath(const QString& name) const
 {
+    // Only used by loadLegacyUiModule (type "ui"); ui_qml uses installDir + view.
     const auto it = m_uiPluginMetadata.constFind(name);
     if (it != m_uiPluginMetadata.cend()) {
-        QString mainFilePath = it->value("mainFilePath").toString();
-        // For QML plugins, the caller needs the directory, not the file
-        if (isQmlPlugin(name)) {
-            return QFileInfo(mainFilePath).absolutePath();
-        }
-        return mainFilePath;
+        return it->value("mainFilePath").toString();
     }
-
     return QString();
 }
 

@@ -44,6 +44,18 @@ if(NOT DEFINED LOGOS_LIBLOGOS_ROOT)
     set(LOGOS_LIBLOGOS_ROOT "${REAL_SOURCE_DIR}/../../logos-liblogos")
 endif()
 
+if(NOT DEFINED LOGOS_VIEW_MODULE_RUNTIME_ROOT)
+    get_filename_component(REAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)
+    set(_candidate "${REAL_SOURCE_DIR}/../../logos-view-module-runtime")
+    if(EXISTS "${_candidate}/include/ViewModuleHost.h")
+        set(LOGOS_VIEW_MODULE_RUNTIME_ROOT "${_candidate}")
+    endif()
+endif()
+if(NOT DEFINED LOGOS_VIEW_MODULE_RUNTIME_ROOT OR NOT EXISTS "${LOGOS_VIEW_MODULE_RUNTIME_ROOT}/include/ViewModuleHost.h")
+    message(FATAL_ERROR "LOGOS_VIEW_MODULE_RUNTIME_ROOT not found. Set it explicitly or provide logos-view-module-runtime as a sibling checkout.")
+endif()
+message(STATUS "Using logos-view-module-runtime at: ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}")
+
 set(_liblogos_found FALSE)
 if(EXISTS "${LOGOS_LIBLOGOS_ROOT}/src/logos_core/logos_core.h")
     set(_liblogos_found TRUE)
@@ -100,7 +112,6 @@ set(SOURCES
     MainContainer.cpp
     MainUIBackend.cpp
     PluginLoader.cpp
-    LogosQmlBridge.cpp
     restricted/DenyAllReply.cpp
     restricted/DenyAllNetworkAccessManager.cpp
     restricted/DenyAllNAMFactory.cpp
@@ -244,9 +255,16 @@ if(LOGOS_PORTABLE_BUILD)
     message(STATUS "Building main_ui as portable (LOGOS_PORTABLE_BUILD enabled)")
 endif()
 
-target_link_libraries(main_ui 
-    PRIVATE 
-        Qt6::Core 
+target_include_directories(main_ui PRIVATE ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}/include)
+find_library(LOGOS_VIEW_MODULE_RUNTIME_LIB
+    NAMES logos_view_module_runtime
+    PATHS ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}/lib
+    NO_DEFAULT_PATH
+    REQUIRED)
+
+target_link_libraries(main_ui
+    PRIVATE
+        Qt6::Core
         Qt6::Widgets
         Qt6::RemoteObjects
         Qt6::Quick
@@ -254,6 +272,7 @@ target_link_libraries(main_ui
         Qt6::QuickWidgets
         Qt6::QuickControls2
         component-interfaces
+        ${LOGOS_VIEW_MODULE_RUNTIME_LIB}
 )
 
 
