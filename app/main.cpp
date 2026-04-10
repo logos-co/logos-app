@@ -7,6 +7,8 @@
 #include "inspectorserver.h"
 #endif
 #include <QApplication>
+#include <QCoreApplication>
+#include <QEvent>
 #include <QIcon>
 #include <QDir>
 #include <QTimer>
@@ -113,13 +115,14 @@ int main(int argc, char *argv[])
     // Don't quit when last window is closed (for system tray support)
     app.setQuitOnLastWindowClosed(false);
 
-    // Create and show the main window
-    Window mainWindow(&logosAPI);
-    mainWindow.show();
+    // Create and show the main window. Heap-allocated so we can control
+    // destruction ordering explicitly during shutdown (see below).
+    auto mainWindow = std::make_unique<Window>(&logosAPI);
+    mainWindow->show();
 
 #ifdef ENABLE_QML_INSPECTOR
     // Start QML Inspector server (controlled by QML_INSPECTOR_PORT env var, default 3768)
-    InspectorServer::attach(&mainWindow);
+    InspectorServer::attach(mainWindow.get());
 #endif
 
     // Set up timer to poll module stats every 2 seconds
@@ -136,7 +139,34 @@ int main(int argc, char *argv[])
     // Run the application
     int result = app.exec();
 
-    // Cleanup
+    // Graceful teardown of the UI before QApplication is destroyed.
+    //
+    // On macOS, tearing down a QQuickWidget hierarchy during stack unwinding
+    // at main() exit can crash inside QCocoaAccessibility::notifyAccessibilityUpdate:
+    // QQuickItem destructors call setParentItem(nullptr), which triggers
+    // setEffectiveVisibleRecur(false), which in turn notifies the Qt accessibility
+    // bridge about items whose backing QObjects are already half-destroyed.
+    //
+    // To avoid this we:
+    //   1. Stop the stats timer so no more work is queued on the event loop.
+    //   2. Hide the main window so QQuickItem visibility changes propagate
+    //      through the accessibility bridge while it is still fully alive.
+    //   3. Drain pending deferred deletes and events.
+    //   4. Destroy the window hierarchy explicitly, while QApplication, the
+    //      Cocoa accessibility bridge, and the QML engines are still around.
+    //   5. Drain deferred deletes and events again, because destroying the
+    //      window/QML hierarchy can itself queue additional deleteLater() work.
+    statsTimer->stop();
+    if (mainWindow) {
+        mainWindow->hide();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QCoreApplication::processEvents();
+        mainWindow.reset();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QCoreApplication::processEvents();
+    }
+
+    // Cleanup logos core (plugins, modules, etc.)
     logos_core_cleanup();
 
     return result;

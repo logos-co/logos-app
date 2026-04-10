@@ -15,7 +15,11 @@ MainUIPlugin::MainUIPlugin(QObject* parent)
 MainUIPlugin::~MainUIPlugin()
 {
     qDebug() << "MainUIPlugin destroyed";
-    destroyWidget(m_mainContainer);
+    // m_mainContainer may already have been destroyed by its Qt parent
+    // (e.g. the central widget owned by Window). QPointer auto-nulls in
+    // that case, so destroyWidget() becomes a no-op and we avoid a
+    // double-delete during plugin unload at process exit.
+    destroyWidget(m_mainContainer.data());
 }
 
 QWidget* MainUIPlugin::createWidget(LogosAPI* logosAPI)
