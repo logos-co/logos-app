@@ -10,14 +10,25 @@ class LogosAPI;
 class IComponent;
 class QWidget;
 class QQuickWidget;
+class ViewModuleHost;
+class LogosQmlBridge;
+
+enum class UIPluginType {
+    Legacy,
+    UiQml
+};
 
 struct PluginLoadRequest {
     QString name;
+    UIPluginType type = UIPluginType::Legacy;
     QString pluginPath;
-    QString qmlFilePath;
-    bool isQml = false;
     QString iconPath;
     QVariantList coreDependencies;
+
+    // ui_qml module fields
+    QString installDir;      // Module install directory (import paths root)
+    QString qmlViewPath;     // Resolved QML view entry point
+    QString mainFilePath;    // Backend plugin .so/.dylib path (empty if QML-only)
 };
 
 class PluginLoader : public QObject {
@@ -33,7 +44,8 @@ public:
 
 signals:
     void pluginLoaded(const QString& name, QWidget* widget,
-                      IComponent* component, bool isQml);
+                      IComponent* component, UIPluginType type,
+                      ViewModuleHost* viewHost);
     void pluginLoadFailed(const QString& name, const QString& error);
     void loadingChanged();
 
@@ -41,10 +53,20 @@ private:
     void startLoad(const PluginLoadRequest& request);
     void loadCoreDependencies(const PluginLoadRequest& request);
     void continueLoad(const PluginLoadRequest& request);
+
+    // legacy ui module loading
     void loadCppPluginAsync(const PluginLoadRequest& request);
-    void loadQmlPluginAsync(const PluginLoadRequest& request);
     void finishCppPluginLoad(const PluginLoadRequest& request);
-    void finishQmlPluginLoad(QQuickWidget* widget, const PluginLoadRequest& request);
+
+    // ui_qml module loading
+    void loadUiQmlModule(const PluginLoadRequest& request);
+    void loadQmlView(const PluginLoadRequest& request,
+                     LogosQmlBridge* bridge,
+                     ViewModuleHost* viewHost);
+    void finishUiQmlLoad(QQuickWidget* qmlWidget,
+                         const PluginLoadRequest& request,
+                         LogosQmlBridge* bridge,
+                         ViewModuleHost* viewHost);
 
     void setLoading(const QString& name, bool loading);
 

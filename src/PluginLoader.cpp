@@ -23,6 +23,7 @@
 #include "logos_api.h"
 #include "restricted/DenyAllNAMFactory.h"
 #include "restricted/RestrictedUrlInterceptor.h"
+#include <ViewModuleHost.h>
 
 extern "C" {
     int logos_core_load_plugin_with_dependencies(const char* plugin_name);
@@ -105,14 +106,17 @@ void PluginLoader::loadCoreDependencies(const PluginLoadRequest& request)
 
 void PluginLoader::continueLoad(const PluginLoadRequest& request)
 {
-    if (request.isQml) {
-        loadQmlPluginAsync(request);
-    } else {
+    switch (request.type) {
+    case UIPluginType::UiQml:
+        loadUiQmlModule(request);
+        break;
+    case UIPluginType::Legacy:
         loadCppPluginAsync(request);
+        break;
     }
 }
 
-// ---------- C++ plugin path ----------
+// ---------- Legacy ui plugin path ----------
 
 void PluginLoader::loadCppPluginAsync(const PluginLoadRequest& request)
 {
@@ -173,60 +177,125 @@ void PluginLoader::finishCppPluginLoad(const PluginLoadRequest& request)
         widget->setWindowIcon(QIcon(request.iconPath));
 
     setLoading(request.name, false);
-    emit pluginLoaded(request.name, widget, component, false);
+    emit pluginLoaded(request.name, widget, component, UIPluginType::Legacy, nullptr);
 }
 
-// ---------- QML plugin path ----------
+// ---------- ui_qml module path ----------
 
-void PluginLoader::loadQmlPluginAsync(const PluginLoadRequest& request)
+void PluginLoader::loadUiQmlModule(const PluginLoadRequest& request)
 {
-    if (!QFile::exists(request.qmlFilePath)) {
-        qWarning() << "QML file not found for plugin" << request.name << ":" << request.qmlFilePath;
+    if (request.qmlViewPath.isEmpty() || !QFile::exists(request.qmlViewPath)) {
+        qWarning() << "ui_qml module QML file not found:" << request.qmlViewPath;
         setLoading(request.name, false);
         emit pluginLoadFailed(request.name,
-            QStringLiteral("QML file not found: ") + request.qmlFilePath);
+            QStringLiteral("QML view file not found: ") + request.qmlViewPath);
         return;
     }
 
-    auto* qmlWidget = new QQuickWidget;
-    qmlWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    auto* bridge = new LogosQmlBridge(m_logosAPI, this);
 
-    QQmlEngine* engine = qmlWidget->engine();
-    if (engine) {
-        QStringList importPaths;
-        importPaths << QStringLiteral("qrc:/qt-project.org/imports");
-        importPaths << QStringLiteral("qrc:/qt/qml");
-        importPaths << request.pluginPath;
-        QString appLibPath = QDir(
-            QCoreApplication::applicationDirPath() + QStringLiteral("/../lib")).absolutePath();
-        if (QDir(appLibPath).exists())
-            importPaths << appLibPath;
-        engine->setImportPathList(importPaths);
-
-        engine->setPluginPathList({});
-
-        engine->setNetworkAccessManagerFactory(new DenyAllNAMFactory());
-        QStringList allowedRoots;
-        allowedRoots << request.pluginPath;
-        engine->addUrlInterceptor(new RestrictedUrlInterceptor(allowedRoots));
-        engine->setBaseUrl(QUrl::fromLocalFile(request.pluginPath + QStringLiteral("/")));
+    if (request.mainFilePath.isEmpty()) {
+        loadQmlView(request, bridge, nullptr);
+        return;
     }
 
-    // Use QQmlComponent::Asynchronous to compile QML in a background thread.
-    // The engine caches compiled types, so the later setSource() will be fast.
-    QUrl sourceUrl = QUrl::fromLocalFile(request.qmlFilePath);
-    auto* preloader = new QQmlComponent(engine, sourceUrl, QQmlComponent::Asynchronous);
+    // Has a backend plugin — spawn a ViewModuleHost process.
+    auto* viewHost = new ViewModuleHost(this);
+    if (!viewHost->spawn(request.name, request.mainFilePath)) {
+        qWarning() << "Failed to spawn ui-host for ui_qml module" << request.name;
+        delete viewHost;
+        delete bridge;
+        setLoading(request.name, false);
+        emit pluginLoadFailed(request.name,
+            QStringLiteral("Failed to spawn ui-host for ") + request.name);
+        return;
+    }
 
-    auto finishOrCleanup = [this, preloader, qmlWidget, request](QQmlComponent::Status status) {
+    auto onHostReady = [this, request, bridge, viewHost]() {
+        bridge->setViewModuleSocket(request.name, viewHost->socketName());
+
+        const QString base = QFileInfo(request.mainFilePath).absolutePath()
+            + QStringLiteral("/") + request.name
+            + QStringLiteral("_replica_factory");
+        for (const QString& suffix : { QStringLiteral(".dylib"),
+                                       QStringLiteral(".so"),
+                                       QStringLiteral(".dll") }) {
+            const QString factoryPath = base + suffix;
+            if (QFile::exists(factoryPath)) {
+                bridge->setViewReplicaPlugin(request.name, factoryPath);
+                break;
+            }
+        }
+        loadQmlView(request, bridge, viewHost);
+    };
+
+    auto* timeout = new QTimer(this);
+    timeout->setSingleShot(true);
+    auto readyConn = std::make_shared<QMetaObject::Connection>();
+    auto timeoutConn = std::make_shared<QMetaObject::Connection>();
+    *readyConn = connect(viewHost, &ViewModuleHost::ready, this,
+        [timeout, readyConn, timeoutConn, onHostReady]() {
+            QObject::disconnect(*readyConn);
+            QObject::disconnect(*timeoutConn);
+            timeout->stop();
+            timeout->deleteLater();
+            onHostReady();
+        });
+    *timeoutConn = connect(timeout, &QTimer::timeout, this,
+        [this, request, viewHost, bridge, timeout, readyConn, timeoutConn]() {
+            QObject::disconnect(*readyConn);
+            QObject::disconnect(*timeoutConn);
+            timeout->deleteLater();
+            qWarning() << "Timeout waiting for ui-host ready signal for" << request.name;
+            viewHost->stop();
+            viewHost->deleteLater();
+            delete bridge;
+            setLoading(request.name, false);
+            emit pluginLoadFailed(request.name,
+                QStringLiteral("Timeout waiting for ui-host for ") + request.name);
+        });
+    timeout->start(30000);
+}
+
+void PluginLoader::loadQmlView(const PluginLoadRequest& request,
+                               LogosQmlBridge* bridge,
+                               ViewModuleHost* viewHost)
+{
+    auto* qmlWidget = new QQuickWidget;
+    qmlWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    if (QQmlEngine* engine = qmlWidget->engine()) {
+        QStringList importPaths = engine->importPathList();
+        importPaths.prepend(request.installDir);
+        engine->setImportPathList(importPaths);
+
+        QStringList pluginPaths = engine->pluginPathList();
+        pluginPaths.prepend(request.installDir);
+        engine->setPluginPathList(pluginPaths);
+
+        engine->setNetworkAccessManagerFactory(new DenyAllNAMFactory());
+        QStringList allowedRoots; allowedRoots << request.installDir;
+        engine->addUrlInterceptor(new RestrictedUrlInterceptor(allowedRoots));
+        engine->setBaseUrl(QUrl::fromLocalFile(request.installDir + "/"));
+    }
+
+    // Async pre-compile: the engine caches compiled types so setSource() is fast.
+    QUrl sourceUrl = QUrl::fromLocalFile(request.qmlViewPath);
+    auto* preloader = new QQmlComponent(qmlWidget->engine(), sourceUrl,
+                                        QQmlComponent::Asynchronous);
+
+    auto finishOrCleanup = [this, preloader, qmlWidget, request, bridge,
+                            viewHost](QQmlComponent::Status status) {
         preloader->deleteLater();
         if (status == QQmlComponent::Ready) {
-            finishQmlPluginLoad(qmlWidget, request);
+            finishUiQmlLoad(qmlWidget, request, bridge, viewHost);
         } else {
             QString errors;
             for (const auto& e : preloader->errors())
                 errors += e.toString() + QStringLiteral("\n");
-            qWarning() << "Failed to compile QML plugin" << request.name << ":" << errors;
+            qWarning() << "Failed to compile ui_qml view" << request.name << ":" << errors;
             qmlWidget->deleteLater();
+            delete bridge;
+            if (viewHost) { viewHost->stop(); delete viewHost; }
             setLoading(request.name, false);
             emit pluginLoadFailed(request.name, errors);
         }
@@ -239,26 +308,30 @@ void PluginLoader::loadQmlPluginAsync(const PluginLoadRequest& request)
     }
 }
 
-void PluginLoader::finishQmlPluginLoad(QQuickWidget* qmlWidget, const PluginLoadRequest& request)
+void PluginLoader::finishUiQmlLoad(QQuickWidget* qmlWidget,
+                                   const PluginLoadRequest& request,
+                                   LogosQmlBridge* bridge,
+                                   ViewModuleHost* viewHost)
 {
-    auto* bridge = new LogosQmlBridge(m_logosAPI, qmlWidget);
+    bridge->setParent(qmlWidget);
     qmlWidget->rootContext()->setContextProperty("logos", bridge);
-    qmlWidget->setSource(QUrl::fromLocalFile(request.qmlFilePath));
+    qmlWidget->setSource(QUrl::fromLocalFile(request.qmlViewPath));
 
     if (!request.iconPath.isEmpty())
         qmlWidget->setWindowIcon(QIcon(request.iconPath));
 
     if (qmlWidget->status() == QQuickWidget::Error) {
-        QString errors;
-        for (const QQmlError& e : qmlWidget->errors())
-            errors += e.toString() + QStringLiteral("\n");
-        qWarning() << "Failed to load QML plugin" << request.name << ":" << errors;
+        qWarning() << "Failed to load ui_qml view" << request.name;
+        const auto errors = qmlWidget->errors();
+        for (const QQmlError& error : errors) qWarning() << error.toString();
         qmlWidget->deleteLater();
+        if (viewHost) { viewHost->stop(); delete viewHost; }
         setLoading(request.name, false);
-        emit pluginLoadFailed(request.name, errors);
+        emit pluginLoadFailed(request.name,
+            QStringLiteral("Failed to load QML view for ") + request.name);
         return;
     }
 
     setLoading(request.name, false);
-    emit pluginLoaded(request.name, qmlWidget, nullptr, true);
+    emit pluginLoaded(request.name, qmlWidget, nullptr, UIPluginType::UiQml, viewHost);
 }
