@@ -8,7 +8,9 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QToolBar>
+#include <QList>
 #include <QMap>
+#include <QMetaObject>
 #include <QTabBar>
 #include <QToolButton>
 
@@ -62,6 +64,9 @@ private:
     QMap<QWidget*, QMdiSubWindow*> m_pluginWindows;
     // Reverse map: subwindow -> widget
     QMap<QMdiSubWindow*, QWidget*> m_subWindowToWidget;
+    // Per-subwindow connection handles for explicit disconnect in destructor.
+    // Entries are removed when the subwindow is destroyed or removed.
+    QMap<QMdiSubWindow*, QMetaObject::Connection> m_subWindowConnections;
     
     int windowCounter;
 };
