@@ -14,7 +14,7 @@
 class QQuickWidget;
 class PluginLoader;
 class ViewModuleHost;
-class LogosQmlBridge;
+enum class UIPluginType;
 
 class MainUIBackend : public QObject {
     Q_OBJECT
@@ -94,7 +94,8 @@ signals:
 
 private slots:
     void onPluginLoaded(const QString& name, QWidget* widget,
-                        IComponent* component, bool isQml);
+                        IComponent* component, UIPluginType type,
+                        ViewModuleHost* viewHost);
     void onPluginLoadFailed(const QString& name, const QString& error);
 
 private:
@@ -102,21 +103,12 @@ private:
     void subscribeToPackageInstallationEvents();
     void fetchUiPluginMetadata();
     QStringList findAvailableUiPlugins() const;
-    void loadQmlUiModule(const QString& moduleName, const QVariantMap& meta);
     void loadLegacyUiModule(const QString& moduleName);
     QString resolveQmlViewPath(const QVariantMap& meta) const;
     QString getPluginPath(const QString& name) const;
     QString getPluginType(const QString& name) const;
     bool isQmlPlugin(const QString& name) const;
     bool hasBackendPlugin(const QString& name) const;
-    // Load a ui_qml module's QML view in-process via QQuickWidget. The bridge
-    // is reparented under the widget. viewHost is non-null when there is a
-    // backend ui-host whose lifetime should be tied to the widget.
-    void loadQmlView(const QString& moduleName,
-                     const QString& installDir,
-                     const QString& qmlViewPath,
-                     LogosQmlBridge* bridge,
-                     ViewModuleHost* viewHost);
     void updateModuleStats();
     QString getPluginIconPath(const QString& pluginName, bool forWidgetIcon = false) const;
     
@@ -150,6 +142,4 @@ private:
     // View module hosts (process-isolated UI plugins)
     QMap<QString, ViewModuleHost*> m_viewModuleHosts;
 
-    // Tracks ui_qml modules currently being loaded (prevents double-loading)
-    QSet<QString> m_loadingQmlModules;
 };
