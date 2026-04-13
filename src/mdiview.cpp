@@ -22,6 +22,16 @@ MdiView::MdiView(QWidget *parent)
 
 MdiView::~MdiView()
 {
+    // Disconnect destroyed-signal lambdas from all tracked subwindows
+    // before member destructors run. Without this, ~QWidget::deleteChildren()
+    // destroys QMdiSubWindows which emit destroyed(), invoking our lambda
+    // that accesses m_pluginWindows/m_subWindowToWidget — already freed.
+    for (const auto& conn : m_subWindowConnections) {
+        QObject::disconnect(conn);
+    }
+    m_subWindowConnections.clear();
+    m_pluginWindows.clear();
+    m_subWindowToWidget.clear();
 }
 
 void MdiView::setupUi()
@@ -383,17 +393,19 @@ QMdiSubWindow* MdiView::addPluginWindow(QWidget* pluginWidget, const QString& ti
     m_pluginWindows[pluginWidget] = subWindow;
     m_subWindowToWidget[subWindow] = pluginWidget;
     
-    connect(subWindow, &QMdiSubWindow::destroyed, this, [this, pluginWidget, subWindow]() {
-        if (!subWindow->windowTitle().isEmpty()) {
-            emit pluginWindowClosed(subWindow->windowTitle());
-        }
-        if (pluginWidget && m_pluginWindows.contains(pluginWidget)) {
+    // Capture the title by value — the QMdiSubWindow is partially destroyed
+    // by the time the destroyed signal fires (only ~QObject remains), so
+    // calling subWindow->windowTitle() in the slot is undefined behavior.
+    QString windowTitle = title;
+    m_subWindowConnections[subWindow] =
+        connect(subWindow, &QMdiSubWindow::destroyed, this, [this, pluginWidget, subWindow, windowTitle]() {
+            if (!windowTitle.isEmpty()) {
+                emit pluginWindowClosed(windowTitle);
+            }
             m_pluginWindows.remove(pluginWidget);
-        }
-        if (subWindow && m_subWindowToWidget.contains(subWindow)) {
             m_subWindowToWidget.remove(subWindow);
-        }
-    });
+            m_subWindowConnections.remove(subWindow);
+        });
     
     updateTabCloseButtons();
     

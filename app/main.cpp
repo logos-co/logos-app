@@ -6,6 +6,7 @@
 #ifdef ENABLE_QML_INSPECTOR
 #include "inspectorserver.h"
 #endif
+#include <QAccessible>
 #include <QApplication>
 #include <QCoreApplication>
 #include <QEvent>
@@ -134,29 +135,41 @@ int main(int argc, char *argv[])
 
     // Graceful teardown of the UI before QApplication is destroyed.
     //
-    // On macOS, tearing down a QQuickWidget hierarchy during stack unwinding
-    // at main() exit can crash inside QCocoaAccessibility::notifyAccessibilityUpdate:
-    // QQuickItem destructors call setParentItem(nullptr), which triggers
-    // setEffectiveVisibleRecur(false), which in turn notifies the Qt accessibility
-    // bridge about items whose backing QObjects are already half-destroyed.
+    // On macOS, tearing down a QQuickWidget hierarchy crashes inside
+    // QCocoaAccessibility::notifyAccessibilityUpdate: QQuickItem destructors
+    // call setParentItem(nullptr) which triggers setEffectiveVisibleRecur(false),
+    // which notifies the accessibility bridge about items whose backing
+    // QObjects are already half-destroyed (null d_ptr → SIGSEGV).
     //
-    // To avoid this we:
-    //   1. Stop the stats timer so no more work is queued on the event loop.
-    //   2. Hide the main window so QQuickItem visibility changes propagate
-    //      through the accessibility bridge while it is still fully alive.
-    //   3. Drain pending deferred deletes and events.
-    //   4. Destroy the window hierarchy explicitly, while QApplication, the
-    //      Cocoa accessibility bridge, and the QML engines are still around.
-    //   5. Drain deferred deletes and events again, because destroying the
-    //      window/QML hierarchy can itself queue additional deleteLater() work.
+    // Hiding the window alone is insufficient — ~QQuickItem() unconditionally
+    // calls setParentItem(nullptr), bypassing the widget visibility state.
+    // The fix is to install a no-op accessibility update handler before
+    // destroying the widget hierarchy, so the platform bridge is never invoked
+    // on partially-destroyed objects.
     statsTimer->stop();
     if (mainWindow) {
         mainWindow->hide();
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         QCoreApplication::processEvents();
+
+        // Suppress accessibility notifications during destruction and the
+        // subsequent deferred-delete drain. QQuickItem::~QQuickItem() →
+        // setParentItem(nullptr) → setEffectiveVisibleRecur →
+        // notifyAccessibilityUpdate will hit this no-op instead of the
+        // Cocoa bridge. The handler stays suppressed through processEvents()
+        // because deleteLater() work queued during destruction can also
+        // trigger the same crash path.
+        auto previousHandler = QAccessible::installUpdateHandler(
+            [](QAccessibleEvent*) {});
+
         mainWindow.reset();
+
+        // Drain remaining deferred work while the no-op handler is still active.
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         QCoreApplication::processEvents();
+
+        // Restore the original handler now that all deferred work is done.
+        QAccessible::installUpdateHandler(previousHandler);
     }
 
     // Cleanup logos core (plugins, modules, etc.)
