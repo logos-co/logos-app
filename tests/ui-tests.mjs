@@ -109,6 +109,35 @@ test("modules: core tab shows auto-loaded plugins as Loaded", async (app) => {
   await app.expectTexts(["(Loaded)", "Unload Plugin"]);
 });
 
+test("modules: loaded plugins render CPU and memory stats", async (app) => {
+  await app.click("Modules");
+  await app.click("Core Modules");
+
+  // Wait for at least one loaded plugin to appear.
+  await app.waitFor(
+    async () => { await app.expectTexts(["package_manager", "(Loaded)"]); },
+    { timeout: 10000, interval: 500, description: "loaded plugins to appear" }
+  );
+
+  // CPU and memory stats update every 2s and values are dynamic
+  // (e.g. "CPU: 0.0%", "Mem: 24.4 MB"). Use getTree with enough
+  // depth to reach the deeply-nested LogosText elements and verify
+  // the "CPU: " and "Mem: " prefixes appear in the rendered text.
+  await app.waitFor(
+    async () => {
+      const tree = await app.getTree({ depth: 20 });
+      const treeStr = JSON.stringify(tree);
+      if (!treeStr.includes("CPU: ")) {
+        throw new Error("No CPU stats rendered for loaded plugins");
+      }
+      if (!treeStr.includes("Mem: ")) {
+        throw new Error("No Mem stats rendered for loaded plugins");
+      }
+    },
+    { timeout: 15000, interval: 2000, description: "CPU and memory stats to appear" }
+  );
+});
+
 // --- Run ---
 
 run();
