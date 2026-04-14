@@ -109,6 +109,94 @@ test("modules: core tab shows auto-loaded plugins as Loaded", async (app) => {
   await app.expectTexts(["(Loaded)", "Unload Plugin"]);
 });
 
+test("modules: loaded plugins render CPU and memory stats", async (app) => {
+  await app.click("Modules");
+  await app.click("Core Modules");
+
+  // Wait for at least one loaded plugin to appear.
+  await app.waitFor(
+    async () => { await app.expectTexts(["package_manager", "(Loaded)"]); },
+    { timeout: 10000, interval: 500, description: "loaded plugins to appear" }
+  );
+
+  // CPU and memory stats update every 2s and values are dynamic
+  // (e.g. "CPU: 0.0%", "Mem: 24.4 MB"). Use getTree with enough
+  // depth to reach the deeply-nested LogosText elements and verify
+  // the "CPU: " and "Mem: " prefixes appear in the rendered text.
+  await app.waitFor(
+    async () => {
+      const tree = await app.getTree({ depth: 20 });
+      const treeStr = JSON.stringify(tree);
+      if (!treeStr.includes("CPU: ")) {
+        throw new Error("No CPU stats rendered for loaded plugins");
+      }
+      if (!treeStr.includes("Mem: ")) {
+        throw new Error("No Mem stats rendered for loaded plugins");
+      }
+    },
+    { timeout: 15000, interval: 2000, description: "CPU and memory stats to appear" }
+  );
+});
+
+test("modules: leaving and returning to Core Modules preserves loaded state", async (app) => {
+  // Navigate to Core Modules and wait for loaded plugins.
+  await app.click("Modules");
+  await app.click("Core Modules");
+
+  await app.waitFor(
+    async () => { await app.expectTexts(["package_manager", "(Loaded)"]); },
+    { timeout: 10000, interval: 500, description: "Core Modules to show loaded plugins" }
+  );
+
+  // Navigate away to Dashboard.
+  await app.click("Dashboard");
+  await app.expectTexts(["Dashboard"]);
+
+  // Navigate back to Modules > Core Modules.
+  await app.click("Modules");
+  await app.click("Core Modules");
+
+  // The previously-loaded modules must still show as "(Loaded)" with stats.
+  await app.waitFor(
+    async () => { await app.expectTexts(["package_manager", "(Loaded)", "Unload Plugin"]); },
+    { timeout: 10000, interval: 500, description: "loaded state to be preserved after returning" }
+  );
+});
+
+// --- Sidebar: sequential plugin opening ---
+//
+// Regression guard: opening multiple plugins one after another must not
+// crash, hang, or leave the sidebar in an inconsistent state. Each
+// plugin is opened via its sidebar icon, we wait for its UI to load,
+// then move on to the next. Finally we verify all opened plugins are
+// still reachable by switching back to each one.
+
+test("sidebar: open multiple plugins sequentially without failure", async (app) => {
+  // Plugins available in the default fixture build (excluding webview_app
+  // which requires a real display / GPU compositor).
+  const plugins = [
+    { name: "counter",              expect: ["0"] },
+    { name: "counter_qml",         expect: ["0"] },
+    { name: "package_manager_ui",  expect: ["Reload"] },
+  ];
+
+  // Open each plugin sequentially.
+  for (const plugin of plugins) {
+    await openPlugin(app, plugin.name, plugin.expect);
+  }
+
+  // Switch back to each plugin and verify its UI is still intact.
+  // Clicking an already-loaded plugin in the sidebar should activate its
+  // tab without reloading.
+  for (const plugin of plugins) {
+    await app.click(plugin.name);
+    await app.waitFor(
+      async () => { await app.expectTexts(plugin.expect); },
+      { timeout: 10000, interval: 500, description: `"${plugin.name}" still accessible` }
+    );
+  }
+});
+
 // --- Run ---
 
 run();
