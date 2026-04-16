@@ -44,23 +44,22 @@ pipeline {
   }
 
   stages {
-    stage('Build AppImage') {
+    stage('Smoke Test') {
       steps { script {
-        nix.flake("appimage")
+        nix.flake('smoke-test')
       } }
     }
 
-    stage('Smoke Test') {
-      steps {
-        sh 'nix build .#smoke-test --out-link result-smoke -L --extra-experimental-features "nix-command flakes"'
-        sh 'cat result-smoke/smoke-test.log'
-      }
+    stage('Build AppImage') {
+      steps { script {
+        nix.flake("bin-appimage")
+      } }
     }
 
     stage('Package') {
       steps {
         sh 'mkdir -p pkg'
-        sh "cp result/LogosBasecamp-*.AppImage '${env.ARTIFACT}'"
+        sh "cp result/logos-basecamp.AppImage '${env.ARTIFACT}'"
       }
     }
 
