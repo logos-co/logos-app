@@ -61,12 +61,12 @@ pipeline {
   post {
     always { script {
       dir('pkg') {
-        sha = "./${utils.pkgFilename(name: 'LogosBasecamp', ext: 'sha256')}"
+        sha = "./${utils.pkgFilename(name: 'LogosBasecamp', type: 'Desktop', ext: 'sha256')}"
         sh "sha256sum * | tee ${sha}"
         urls['SHA'] = s5cmd.upload(sha)
         jenkins.setBuildDesc(urls)
       }
-      archiveArtifacts('pkg/*')
+       archiveArtifacts("pkg/*.sha256")
     } }
     cleanup {
       cleanWs(disableDeferredWipeout: true)
