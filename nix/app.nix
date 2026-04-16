@@ -34,6 +34,7 @@ pkgs.stdenv.mkDerivation rec {
       pkgs.qt6.qtremoteobjects
       pkgs.qt6.qtwebview
       pkgs.qt6.qtdeclarative
+      pkgs.qt6.qtsvg
       pkgs.zstd
       pkgs.krb5
       pkgs.zlib
@@ -55,8 +56,8 @@ pkgs.stdenv.mkDerivation rec {
       pkgs.xorg.libxcb
     ]
   );
-  qtPluginPath = "${pkgs.qt6.qtbase}/lib/qt-6/plugins:${pkgs.qt6.qtwebview}/lib/qt-6/plugins";
-  qmlImportPath = "${placeholder "out"}/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml";
+  qtPluginPath = "${pkgs.qt6.qtbase}/lib/qt-6/plugins:${pkgs.qt6.qtwebview}/lib/qt-6/plugins:${pkgs.qt6.qtsvg}/lib/qt-6/plugins";
+  qmlImportPath = "${placeholder "out"}/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml:${pkgs.qt6.qtsvg}/lib/qt-6/qml";
 
   preConfigure = ''
     runHook prePreConfigure
@@ -94,7 +95,7 @@ pkgs.stdenv.mkDerivation rec {
   # (they're used by portable-bundled plugins whose nix-store refs are stripped).
   passthru = {
     extraDirs = [ "modules" "plugins" ];
-    extraClosurePaths = [ pkgs.qt6.qtwebview ];
+    extraClosurePaths = [ pkgs.qt6.qtwebview pkgs.qt6.qtsvg ];
   };
 
   # This is an aggregate runtime layout; avoid stripping to prevent hook errors
@@ -109,8 +110,8 @@ pkgs.stdenv.mkDerivation rec {
     runHook prePreFixup
 
     # Set up Qt environment variables
-    export QT_PLUGIN_PATH="${pkgs.qt6.qtbase}/lib/qt-6/plugins:${pkgs.qt6.qtwebview}/lib/qt-6/plugins"
-    export QML2_IMPORT_PATH="${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml"
+    export QT_PLUGIN_PATH="${pkgs.qt6.qtbase}/lib/qt-6/plugins:${pkgs.qt6.qtwebview}/lib/qt-6/plugins:${pkgs.qt6.qtsvg}/lib/qt-6/plugins"
+    export QML2_IMPORT_PATH="${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml:${pkgs.qt6.qtsvg}/lib/qt-6/qml"
 
     # Remove any remaining references to /build/ in binaries and set proper RPATH
     find $out -type f -executable -exec sh -c '

@@ -342,6 +342,7 @@ void PluginLoader::finishUiQmlLoad(QQuickWidget* qmlWidget,
 {
     bridge->setParent(qmlWidget);
     qmlWidget->rootContext()->setContextProperty("logos", bridge);
+    qmlWidget->rootContext()->setContextProperty("isActiveTab", true);
     qmlWidget->setSource(QUrl::fromLocalFile(request.qmlViewPath));
 
     if (!request.iconPath.isEmpty())

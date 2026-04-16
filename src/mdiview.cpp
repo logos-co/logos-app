@@ -10,6 +10,8 @@
 #include <QScroller>
 #include <QScrollerProperties>
 #include <QEasingCurve>
+#include <QQmlContext>
+#include <QQuickWidget>
 
 MdiView::MdiView(QWidget *parent)
     : QWidget(parent)
@@ -50,7 +52,11 @@ void MdiView::setupUi()
     
     mdiArea->setTabsClosable(true);
     
-    connect(mdiArea, &QMdiArea::subWindowActivated, this, &MdiView::updateTabCloseButtons);
+    connect(mdiArea, &QMdiArea::subWindowActivated, this,
+            [this](QMdiSubWindow*) {
+                updateTabCloseButtons();
+                updateQmlPluginActiveStates();
+            });
     
     mainLayout->addWidget(mdiArea);
     
@@ -99,6 +105,9 @@ void MdiView::updateTabCloseButtons()
         if (tabBar) {
             tabBar->setTabsClosable(false);
             disconnect(tabBar, &QTabBar::tabCloseRequested, nullptr, nullptr);
+            QObject::disconnect(m_tabChangedConnection);
+            m_tabChangedConnection = connect(tabBar, &QTabBar::currentChanged, this,
+                    [this](int) { updateQmlPluginActiveStates(); });
             
             connect(tabBar, &QTabBar::tabCloseRequested, [this](int index) {
                 QList<QMdiSubWindow*> windows = mdiArea->subWindowList();
@@ -106,6 +115,7 @@ void MdiView::updateTabCloseButtons()
                 if (index >= 0 && index < windows.size()) {
                     windows.at(index)->close();
                     QTimer::singleShot(0, this, &MdiView::updateTabCloseButtons);
+                    QTimer::singleShot(0, this, [this]() { updateQmlPluginActiveStates(); });
                 }
             });
 
@@ -117,6 +127,21 @@ void MdiView::updateTabCloseButtons()
                 repositionMdiAddButton();
             });
         }
+    }
+}
+
+void MdiView::updateQmlPluginActiveStates()
+{
+    const bool mdiVisible = isVisible();
+    QMdiSubWindow* activeSubWindow = mdiVisible ? mdiArea->activeSubWindow() : nullptr;
+
+    for (auto it = m_subWindowToWidget.cbegin(); it != m_subWindowToWidget.cend(); ++it) {
+        auto* qmlWidget = qobject_cast<QQuickWidget*>(it.value());
+        if (!qmlWidget) {
+            continue;
+        }
+        const bool isActive = mdiVisible && (it.key() == activeSubWindow);
+        qmlWidget->rootContext()->setContextProperty("isActiveTab", isActive);
     }
 }
 
@@ -336,6 +361,7 @@ bool MdiView::eventFilter(QObject* watched, QEvent* event)
                 const int next = qBound(0, tabBar->currentIndex() + (delta > 0 ? -1 : 1), tabBar->count() - 1);
                 if (next != tabBar->currentIndex()) {
                     tabBar->setCurrentIndex(next);
+                    updateQmlPluginActiveStates();
                     return true;
                 }
             }
@@ -405,9 +431,11 @@ QMdiSubWindow* MdiView::addPluginWindow(QWidget* pluginWidget, const QString& ti
             m_pluginWindows.remove(pluginWidget);
             m_subWindowToWidget.remove(subWindow);
             m_subWindowConnections.remove(subWindow);
+            updateQmlPluginActiveStates();
         });
     
     updateTabCloseButtons();
+    updateQmlPluginActiveStates();
     
     return subWindow;
 }
@@ -417,7 +445,7 @@ void MdiView::removePluginWindow(QWidget* pluginWidget)
     if (!pluginWidget || !m_pluginWindows.contains(pluginWidget)) {
         return;
     }
-    
+
     QMdiSubWindow* subWindow = m_pluginWindows[pluginWidget];
     if (subWindow) {
         subWindow->setWidget(nullptr);
@@ -458,10 +486,23 @@ void MdiView::activatePluginWindow(QWidget* pluginWidget)
             subWindow->raise();
             subWindow->activateWindow();
             mdiArea->setActiveSubWindow(subWindow);
+            updateQmlPluginActiveStates();
         } else {
             qDebug() << "MdiView::activatePluginWindow: subwindow widget mismatch";
         }
     } else {
         qDebug() << "MdiView::activatePluginWindow: subWindow is null";
     }
-} 
+}
+
+void MdiView::hideEvent(QHideEvent* event)
+{
+    QWidget::hideEvent(event);
+    updateQmlPluginActiveStates();
+}
+
+void MdiView::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    updateQmlPluginActiveStates();
+}

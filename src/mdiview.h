@@ -14,6 +14,9 @@
 #include <QTabBar>
 #include <QToolButton>
 
+class QHideEvent;
+class QShowEvent;
+
 class MdiView : public QWidget
 {
     Q_OBJECT
@@ -44,6 +47,7 @@ private slots:
 
 private:
     void setupUi();
+    void updateQmlPluginActiveStates();
 
     void ensureMdiAddButton(QTabBar* tabBar);
     void repositionMdiAddButton();
@@ -52,6 +56,8 @@ private:
     void installTabBarCloseButtons(QTabBar* tabBar);
     void insetTabBarGeometry(QTabBar *tabBar, int insetPx);
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
     QMdiArea *mdiArea;
     QPushButton *addButton;
@@ -67,6 +73,7 @@ private:
     // Per-subwindow connection handles for explicit disconnect in destructor.
     // Entries are removed when the subwindow is destroyed or removed.
     QMap<QMdiSubWindow*, QMetaObject::Connection> m_subWindowConnections;
+    QMetaObject::Connection m_tabChangedConnection;
     
     int windowCounter;
 };
