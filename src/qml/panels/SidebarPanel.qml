@@ -121,6 +121,7 @@ Control {
                             checked: modelData.name === (backend.currentVisibleApp || "")
                             text: modelData.name
                             icon.source: modelData.iconPath
+                            hasMissingDeps: modelData.hasMissingDeps === true
                             onClicked: root.launchUIModule(modelData.name)
                         }
                     }
@@ -141,6 +142,7 @@ Control {
                             enabled: !loading
                             text: modelData.name
                             icon.source: modelData.iconPath
+                            hasMissingDeps: modelData.hasMissingDeps === true
                             onClicked: root.launchUIModule(modelData.name)
                         }
                     }

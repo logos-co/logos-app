@@ -3,5 +3,6 @@ ContentViews 1.0 ContentViews.qml
 DashboardView 1.0 DashboardView.qml
 ModulesView 1.0 ModulesView.qml
 CoreModulesView 1.0 CoreModulesView.qml
+OverlayDialogs 1.0 OverlayDialogs.qml
 PluginMethodsView 1.0 PluginMethodsView.qml
 SettingsView 1.0 SettingsView.qml

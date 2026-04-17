@@ -72,8 +72,16 @@ test("counter: increment twice and expect value 2", async (app) => {
   await app.click("Increment me");
   await app.click("Increment me");
 
-  // Verify counter shows 2
-  await app.expectTexts(["2"]);
+  // Verify counter shows 2. Use waitFor rather than a bare expectTexts —
+  // Qt click → slot → widget repaint is asynchronous, and the click-to-
+  // paint latency varies between Linux (QCocoa absent) and macOS (QCocoa
+  // in the dispatch path even under -platform offscreen). On macOS we
+  // were racing the paint and the assertion occasionally fired before
+  // the "2" had landed in the rendered tree.
+  await app.waitFor(
+    async () => { await app.expectTexts(["2"]); },
+    { timeout: 5000, interval: 200, description: "counter value to reach 2" }
+  );
 });
 
 // --- Counter QML ---

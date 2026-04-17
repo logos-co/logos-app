@@ -12,6 +12,7 @@ class QWidget;
 class QQuickWidget;
 class ViewModuleHost;
 class LogosQmlBridge;
+class CoreModuleManager;
 
 enum class UIPluginType {
     Legacy,
@@ -35,7 +36,13 @@ class PluginLoader : public QObject {
     Q_OBJECT
 
 public:
-    explicit PluginLoader(LogosAPI* logosAPI, QObject* parent = nullptr);
+    // coreModuleManager is the single owner of the logos_core_* C API.
+    // Used here to load a ui plugin's core dependencies before the ui plugin
+    // itself mounts. Not owned — the PluginLoader's parent (PluginManager)
+    // holds a sibling pointer to the same CoreModuleManager.
+    explicit PluginLoader(LogosAPI* logosAPI,
+                          CoreModuleManager* coreModuleManager,
+                          QObject* parent = nullptr);
 
     void load(const PluginLoadRequest& request);
 
@@ -71,6 +78,7 @@ private:
     void setLoading(const QString& name, bool loading);
 
     LogosAPI* m_logosAPI;
+    CoreModuleManager* m_coreModuleManager;   // not owned
 
     mutable QMutex m_mutex;
     QSet<QString> m_loading;

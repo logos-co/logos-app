@@ -10,6 +10,10 @@ AbstractButton {
 
     property bool loaded: false
     property bool loading: false
+    // True iff the backend reports this plugin has unmet core dependencies.
+    // When set, a red-cross overlay renders top-right — clicking still emits
+    // `clicked`, and the backend decides whether to load or show the popup.
+    property bool hasMissingDeps: false
 
     implicitHeight: 50
 
@@ -79,6 +83,39 @@ AbstractButton {
                     x: spinner.width / 2 + 7 * Math.cos(index * Math.PI / 4) - width / 2
                     y: spinner.height / 2 + 7 * Math.sin(index * Math.PI / 4) - height / 2
                 }
+            }
+        }
+
+        // Missing-dependencies overlay: small red circle with a white "x",
+        // drawn with QML primitives so we don't need to ship a new asset.
+        // Anchored top-right of the delegate; hidden while the plugin is
+        // loading (spinner animates there otherwise the two overlap).
+        Rectangle {
+            id: missingDepsMarker
+            visible: root.hasMissingDeps && !root.loading
+            width: 14
+            height: 14
+            radius: 7
+            color: "#d32f2f" // material red 700 — not in the current theme palette
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: 6
+            anchors.topMargin: 6
+
+            // White "x" — two thin rectangles rotated 45°/-45° inside the circle.
+            Rectangle {
+                width: 8
+                height: 1.5
+                color: "white"
+                anchors.centerIn: parent
+                rotation: 45
+            }
+            Rectangle {
+                width: 8
+                height: 1.5
+                color: "white"
+                anchors.centerIn: parent
+                rotation: -45
             }
         }
     }

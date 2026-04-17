@@ -1,127 +1,98 @@
 #include "MainUIBackend.h"
-#include "PluginLoader.h"
-#include "LogosBasecampPaths.h"
+#include "CoreModuleManager.h"
+#include "UIPluginManager.h"
+#include "PackageCoordinator.h"
+
 #include <QDebug>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QJsonDocument>
-
-#include <QCoreApplication>
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
-#include <QLibraryInfo>
-#include <QTimer>
-#include <QQmlContext>
-#include <QQuickWidget>
-#include <QQmlEngine>
-#include <QQmlError>
-#include <QUrl>
-#include <QIcon>
-#include <QStandardPaths>
-#include <QPointer>
-#include <QFileDialog>
-#include <memory>
-#include <ViewModuleHost.h>
-#include "logos_sdk.h"
-#include "token_manager.h"
-
-extern "C" {
-    char* logos_core_get_module_stats();
-    char* logos_core_process_plugin(const char* plugin_path);
-    char** logos_core_get_known_plugins();
-    char** logos_core_get_loaded_plugins();
-    int logos_core_load_plugin_with_dependencies(const char* plugin_name);
-    int logos_core_unload_plugin(const char* plugin_name);
-    void logos_core_refresh_plugins();
-}
 
 MainUIBackend::MainUIBackend(LogosAPI* logosAPI, QObject* parent)
     : QObject(parent)
     , m_currentActiveSectionIndex(0)
     , m_logosAPI(logosAPI)
     , m_ownsLogosAPI(false)
-    , m_statsTimer(nullptr)
-    , m_currentVisibleApp("")
+    , m_coreModuleManager(nullptr)
+    , m_uiPluginManager(nullptr)
+    , m_packageCoordinator(nullptr)
 {
     if (!m_logosAPI) {
         m_logosAPI = new LogosAPI("core", this);
         m_ownsLogosAPI = true;
     }
 
-    m_pluginLoader = new PluginLoader(m_logosAPI, this);
-    connect(m_pluginLoader, &PluginLoader::pluginLoaded,
-            this, &MainUIBackend::onPluginLoaded);
-    connect(m_pluginLoader, &PluginLoader::pluginLoadFailed,
-            this, &MainUIBackend::onPluginLoadFailed);
-    connect(m_pluginLoader, &PluginLoader::loadingChanged,
-            this, &MainUIBackend::loadingModulesChanged);
-    
     initializeSections();
-    
-    m_statsTimer = new QTimer(this);
-    connect(m_statsTimer, &QTimer::timeout, this, &MainUIBackend::updateModuleStats);
-    m_statsTimer->start(2000);
-    
-    refreshCoreModules();
 
-    subscribeToPackageInstallationEvents();
+    // Order matters: CoreModuleManager must exist before UIPluginManager so
+    // the latter's ctor can receive a valid pointer; UIPluginManager must
+    // exist before PackageCoordinator for the same reason. Qt tears children
+    // down in reverse order at destruction, so PackageCoordinator dies first
+    // (stops talking to the module), then UIPluginManager (tears down
+    // widgets while CoreModuleManager's C API handle is still valid).
+    m_coreModuleManager = new CoreModuleManager(m_logosAPI, this);
+    m_uiPluginManager   = new UIPluginManager(m_logosAPI, m_coreModuleManager, this);
+    m_packageCoordinator    = new PackageCoordinator(m_logosAPI, m_coreModuleManager, m_uiPluginManager, this);
 
-    // Initial async fetch of UI plugin metadata (emits uiModulesChanged + launcherAppsChanged when done)
-    fetchUiPluginMetadata();
-    
+    // Setter-injection closes the cycle — UIPluginManager queries
+    // PackageCoordinator for installType / missing-deps when building its
+    // uiModules() list, and consumes uiPluginsFetched for its UI-specific
+    // metadata cache. See UIPluginManager::setPackageCoordinator for the signal
+    // connections it sets up internally.
+    m_uiPluginManager->setPackageCoordinator(m_packageCoordinator);
+
+    // Forward manager signals into our own signals of the same name. QML
+    // binds to these; by funneling through the facade we keep a stable
+    // surface regardless of which manager emitted them.
+    //
+    // UIPluginManager drives uiModulesChanged/launcherAppsChanged on load/
+    // unload events; PackageCoordinator's own uiModulesChanged/launcherAppsChanged
+    // already flow through UIPluginManager (wired in setPackageCoordinator) so
+    // we only need to listen to UIPluginManager here.
+    connect(m_uiPluginManager, &UIPluginManager::uiModulesChanged,
+            this,              &MainUIBackend::uiModulesChanged);
+    connect(m_uiPluginManager, &UIPluginManager::launcherAppsChanged,
+            this,              &MainUIBackend::launcherAppsChanged);
+    connect(m_uiPluginManager, &UIPluginManager::loadingModulesChanged,
+            this,              &MainUIBackend::loadingModulesChanged);
+    connect(m_uiPluginManager, &UIPluginManager::currentVisibleAppChanged,
+            this,              &MainUIBackend::currentVisibleAppChanged);
+    connect(m_uiPluginManager, &UIPluginManager::navigateToApps,
+            this,              &MainUIBackend::navigateToApps);
+    connect(m_uiPluginManager, &UIPluginManager::missingDepsPopupRequested,
+            this,              &MainUIBackend::missingDepsPopupRequested);
+    connect(m_uiPluginManager, &UIPluginManager::unloadCascadeConfirmationRequested,
+            this,              &MainUIBackend::unloadCascadeConfirmationRequested);
+    connect(m_uiPluginManager, &UIPluginManager::pluginWindowRequested,
+            this,              &MainUIBackend::pluginWindowRequested);
+    connect(m_uiPluginManager, &UIPluginManager::pluginWindowRemoveRequested,
+            this,              &MainUIBackend::pluginWindowRemoveRequested);
+    connect(m_uiPluginManager, &UIPluginManager::pluginWindowActivateRequested,
+            this,              &MainUIBackend::pluginWindowActivateRequested);
+
+    // PackageCoordinator emits its own dialog-request signals; forward both.
+    connect(m_packageCoordinator, &PackageCoordinator::installConfirmationRequested,
+            this,             &MainUIBackend::installConfirmationRequested);
+    connect(m_packageCoordinator, &PackageCoordinator::uninstallCascadeConfirmationRequested,
+            this,             &MainUIBackend::uninstallCascadeConfirmationRequested);
+
+    // Any of the three managers can trigger coreModulesChanged:
+    //   * CoreModuleManager on stats-tick / refresh
+    //   * UIPluginManager on cascade-induced state changes (re-emits
+    //     PackageCoordinator's coreModulesChanged as part of that wiring)
+    // Qt coalesces redundant property-change notifies within a frame so the
+    // multi-connect doesn't cause visible flicker.
+    connect(m_uiPluginManager,    &UIPluginManager::coreModulesChanged,
+            this,                 &MainUIBackend::coreModulesChanged);
+    connect(m_coreModuleManager,  &CoreModuleManager::coreModulesChanged,
+            this,                 &MainUIBackend::coreModulesChanged);
+
+    // Kick the first catalog scan now that all wiring is in place. We do
+    // this AFTER setPackageCoordinator (and its signal connections) so the
+    // resulting uiPluginsFetched / uiModulesChanged land on live slots.
+    m_packageCoordinator->refresh();
+
     qDebug() << "MainUIBackend created";
 }
 
-MainUIBackend::~MainUIBackend()
-{
-    QStringList moduleNames = m_loadedUiModules.keys();
-    for (const QString& name : m_qmlPluginWidgets.keys()) {
-        if (!moduleNames.contains(name)) {
-            moduleNames.append(name);
-        }
-    }
-
-    for (const QString& name : moduleNames) {
-        unloadUiModule(name);
-    }
-}
-
-void MainUIBackend::subscribeToPackageInstallationEvents()
-{
-    if (!m_logosAPI) {
-        return;
-    }
-    
-    LogosAPIClient* client = m_logosAPI->getClient("package_manager");
-    if (!client || !client->isConnected()) {
-        return;
-    }
-    
-    LogosModules logos(m_logosAPI);
-
-    // Configure the package_manager module's directories so it knows where to install
-    logos.package_manager.setEmbeddedModulesDirectory(LogosBasecampPaths::embeddedModulesDirectory());
-    logos.package_manager.setUserModulesDirectory(LogosBasecampPaths::modulesDirectory());
-    logos.package_manager.setEmbeddedUiPluginsDirectory(LogosBasecampPaths::embeddedPluginsDirectory());
-    logos.package_manager.setUserUiPluginsDirectory(LogosBasecampPaths::pluginsDirectory());
-
-    logos.package_manager.on("corePluginFileInstalled", [this](const QVariantList& data) {
-        if (data.isEmpty()) return;
-        qDebug() << "Core module file installed:" << data[0].toString();
-        QTimer::singleShot(100, this, [this]() {
-            refreshCoreModules();
-        });
-    });
-
-    logos.package_manager.on("uiPluginFileInstalled", [this](const QVariantList& data) {
-        if (data.isEmpty()) return;
-        qDebug() << "UI plugin file installed:" << data[0].toString();
-        QTimer::singleShot(100, this, [this]() {
-            fetchUiPluginMetadata();
-        });
-    });
-}
+MainUIBackend::~MainUIBackend() = default;
 
 void MainUIBackend::initializeSections()
 {
@@ -153,12 +124,14 @@ void MainUIBackend::setCurrentActiveSectionIndex(int index)
         m_currentActiveSectionIndex = index;
         emit currentActiveSectionIndexChanged();
 
-        // Check if we're navigating to Modules view
+        // On entering the Modules view, kick a refresh of both lists so the
+        // user sees up-to-date state. Both managers' refresh paths are
+        // non-blocking.
         const QVariantMap section = m_sections[index].toMap();
         const QString name = section.value("name").toString();
         if (name == "Modules") {
-            fetchUiPluginMetadata();
-            refreshCoreModules();
+            m_uiPluginManager->refreshUiModules();
+            m_coreModuleManager->refresh();
         }
     }
 }
@@ -168,213 +141,35 @@ QVariantList MainUIBackend::sections() const
     return m_sections;
 }
 
-QVariantList MainUIBackend::uiModules() const
-{
-    QVariantList modules;
-    QStringList availablePlugins = findAvailableUiPlugins();
-    
-    for (const QString& pluginName : availablePlugins) {
-        QVariantMap module;
-        module["name"] = pluginName;
-        module["isLoaded"] = m_loadedUiModules.contains(pluginName) || m_qmlPluginWidgets.contains(pluginName);
-        module["isMainUi"] = (pluginName == "main_ui");
-        module["iconPath"] = getPluginIconPath(pluginName);
-        
-        modules.append(module);
-    }
-    
-    return modules;
-}
-
-void MainUIBackend::loadUiModule(const QString& moduleName)
-{
-    qDebug() << "Loading UI module:" << moduleName;
-
-    if (m_loadedUiModules.contains(moduleName) || m_qmlPluginWidgets.contains(moduleName)) {
-        qDebug() << "Module" << moduleName << "is already loaded";
-        activateApp(moduleName);
-        return;
-    }
-
-    if (isQmlPlugin(moduleName)) {
-        const QVariantMap& meta = m_uiPluginMetadata.value(moduleName);
-
-        PluginLoadRequest request;
-        request.name = moduleName;
-        request.type = UIPluginType::UiQml;
-        request.installDir = meta.value("installDir").toString();
-        request.qmlViewPath = resolveQmlViewPath(meta);
-        request.iconPath = getPluginIconPath(moduleName, true);
-        if (hasBackendPlugin(moduleName))
-            request.mainFilePath = meta.value("mainFilePath").toString();
-        request.coreDependencies = meta.value("dependencies").toList();
-
-        m_pluginLoader->load(request);
-        return;
-    }
-
-    loadLegacyUiModule(moduleName);
-}
-
-void MainUIBackend::onPluginLoaded(const QString& name, QWidget* widget,
-                                   IComponent* component, UIPluginType type,
-                                   ViewModuleHost* viewHost)
-{
-    if (component)
-        m_loadedUiModules[name] = component;
-    if (type != UIPluginType::Legacy)
-        m_qmlPluginWidgets[name] = qobject_cast<QQuickWidget*>(widget);
-    if (viewHost)
-        m_viewModuleHosts[name] = viewHost;
-    m_uiModuleWidgets[name] = widget;
-    m_loadedApps.insert(name);
-
-    emit uiModulesChanged();
-    emit launcherAppsChanged();
-    emit pluginWindowRequested(widget, name);
-    emit navigateToApps();
-
-    qDebug() << "Successfully loaded UI module:" << name;
-}
-
-void MainUIBackend::onPluginLoadFailed(const QString& name, const QString& error)
-{
-    qWarning() << "Failed to load UI module" << name << ":" << error;
-}
-
-QStringList MainUIBackend::loadingModules() const
-{
-    return m_pluginLoader->loadingPlugins();
-}
-
-void MainUIBackend::unloadUiModule(const QString& moduleName)
-{
-    qDebug() << "Unloading UI module:" << moduleName;
-    
-    bool isQml = m_qmlPluginWidgets.contains(moduleName);
-    bool isCpp = m_loadedUiModules.contains(moduleName);
-
-    if (!isQml && !isCpp) {
-        qDebug() << "Module" << moduleName << "is not loaded";
-        return;
-    }
-    
-    QWidget* widget = m_uiModuleWidgets.value(moduleName);
-    IComponent* component = m_loadedUiModules.value(moduleName);
-    
-    if (widget) {
-        emit pluginWindowRemoveRequested(widget);
-    }
-    
-    if (component && widget) {
-        component->destroyWidget(widget);
-    }
-
-    if (isQml && widget) {
-        widget->deleteLater();
-    }
-    
-    // Stop view module host process if this was a view module
-    if (m_viewModuleHosts.contains(moduleName)) {
-        m_viewModuleHosts[moduleName]->stop();
-        delete m_viewModuleHosts.take(moduleName);
-    }
-
-    m_loadedUiModules.remove(moduleName);
-    m_uiModuleWidgets.remove(moduleName);
-    m_qmlPluginWidgets.remove(moduleName);
-    m_loadedApps.remove(moduleName);
-
-    emit uiModulesChanged();
-    emit launcherAppsChanged();
-
-    qDebug() << "Successfully unloaded UI module:" << moduleName;
-}
-
-
-void MainUIBackend::activateApp(const QString& appName)
-{
-    QWidget* widget = m_uiModuleWidgets.value(appName);
-    if (widget) {
-        emit pluginWindowActivateRequested(widget);
-        emit navigateToApps();
-    }
-}
-
-void MainUIBackend::setCurrentVisibleApp(const QString& pluginName)
-{
-    if (m_currentVisibleApp != pluginName) {
-        m_currentVisibleApp = pluginName;
-        emit currentVisibleAppChanged();
-        emit launcherAppsChanged();
-    }
-}
-
-QString MainUIBackend::currentVisibleApp() const
-{
-    return m_currentVisibleApp;
-}
-
-void MainUIBackend::onPluginWindowClosed(const QString& pluginName)
-{
-    qDebug() << "Plugin window closed:" << pluginName;
-
-    // Called when user closes the plugin window (tab X or subwindow close). The MDI
-    // subwindow and plugin widget are already destroyed
-    if (m_loadedUiModules.contains(pluginName)) {
-        m_loadedUiModules.remove(pluginName);
-        m_uiModuleWidgets.remove(pluginName);
-        m_loadedApps.remove(pluginName);
-
-        emit uiModulesChanged();
-        emit launcherAppsChanged();
-    } else if (m_qmlPluginWidgets.contains(pluginName)) {
-        // Stop view module host process if applicable
-        if (m_viewModuleHosts.contains(pluginName)) {
-            m_viewModuleHosts[pluginName]->stop();
-            delete m_viewModuleHosts.take(pluginName);
-        }
-
-        m_qmlPluginWidgets.remove(pluginName);
-        m_uiModuleWidgets.remove(pluginName);
-        m_loadedApps.remove(pluginName);
-
-        emit uiModulesChanged();
-        emit launcherAppsChanged();
-    }
-}
-
+// --- coreModules() composer ------------------------------------------------
+//
+// coreModules is the one QML-visible property that spans multiple managers.
+// Known + loaded + stats come from CoreModuleManager (raw liblogos state);
+// installType comes from PackageCoordinator (populated during its dep-info
+// refresh). We compose here so neither manager has to know about the other's
+// schema.
 QVariantList MainUIBackend::coreModules() const
 {
     QVariantList modules;
+    if (!m_coreModuleManager) return modules;
 
-    // Build the set of loaded plugins for status checking
-    QStringList loadedPlugins;
-    char** loaded = logos_core_get_loaded_plugins();
-    if (loaded) {
-        for (char** p = loaded; *p != nullptr; ++p) {
-            loadedPlugins << QString::fromUtf8(*p);
-            delete[] *p;
-        }
-        delete[] loaded;
-    }
+    const QStringList known  = m_coreModuleManager->knownPlugins();
+    const QStringList loaded = m_coreModuleManager->loadedPlugins();
 
-    char** known = logos_core_get_known_plugins();
-    if (!known) {
-        return modules;
-    }
-
-    for (char** p = known; *p != nullptr; ++p) {
-        QString name = QString::fromUtf8(*p);
-        delete[] *p;
-
+    for (const QString& name : known) {
         QVariantMap module;
         module["name"] = name;
-        module["isLoaded"] = loadedPlugins.contains(name);
+        module["isLoaded"] = loaded.contains(name);
+        // installType populated lazily by refreshDependencyInfo's full-scan
+        // pass on PackageCoordinator. Empty means "not known yet" — QML treats
+        // that as a non-user module and hides Uninstall, which is the safe
+        // default.
+        module["installType"] = m_packageCoordinator ? m_packageCoordinator->installType(name) : QString();
 
-        if (m_moduleStats.contains(name)) {
-            module["cpu"] = m_moduleStats[name]["cpu"];
-            module["memory"] = m_moduleStats[name]["memory"];
+        const QVariantMap stats = m_coreModuleManager->moduleStats(name);
+        if (!stats.isEmpty()) {
+            module["cpu"] = stats["cpu"];
+            module["memory"] = stats["memory"];
         } else {
             module["cpu"] = "0.0";
             module["memory"] = "0.0";
@@ -382,339 +177,56 @@ QVariantList MainUIBackend::coreModules() const
 
         modules.append(module);
     }
-    delete[] known;
 
     return modules;
 }
 
-void MainUIBackend::loadCoreModule(const QString& moduleName)
-{
-    qDebug() << "Loading core module:" << moduleName;
+// --- Manager delegations ---------------------------------------------------
+//
+// Each slot is a one-liner routing to the right manager. These stay on
+// MainUIBackend so the QML `backend.foo(...)` contract is untouched by the
+// refactor (QML still sees one receiver).
 
-    bool success = logos_core_load_plugin_with_dependencies(moduleName.toUtf8().constData()) == 1;
+QVariantList MainUIBackend::uiModules() const        { return m_uiPluginManager->uiModules(); }
+QVariantList MainUIBackend::launcherApps() const     { return m_uiPluginManager->launcherApps(); }
+QString      MainUIBackend::currentVisibleApp() const{ return m_uiPluginManager->currentVisibleApp(); }
+QStringList  MainUIBackend::loadingModules() const   { return m_uiPluginManager->loadingModules(); }
 
-    if (success) {
-        qDebug() << "Successfully loaded core module:" << moduleName;
-        emit coreModulesChanged();
-    } else {
-        qDebug() << "Failed to load core module:" << moduleName;
-    }
+// UIPluginManager — UI plugin widget lifecycle + local unload cascade.
+void MainUIBackend::loadUiModule(const QString& n)            { m_uiPluginManager->loadUiModule(n); }
+void MainUIBackend::unloadUiModule(const QString& n)          { m_uiPluginManager->unloadUiModule(n); }
+void MainUIBackend::activateApp(const QString& n)             { m_uiPluginManager->activateApp(n); }
+void MainUIBackend::confirmUnloadCascade(const QString& n)    { m_uiPluginManager->confirmUnloadCascade(n); }
+void MainUIBackend::loadCoreModule(const QString& n)          { m_uiPluginManager->loadCoreModule(n); }
+void MainUIBackend::unloadCoreModule(const QString& n)        { m_uiPluginManager->unloadCoreModule(n); }
+void MainUIBackend::refreshUiModules()                        { m_uiPluginManager->refreshUiModules(); }
+void MainUIBackend::onAppLauncherClicked(const QString& n)    { m_uiPluginManager->onAppLauncherClicked(n); }
+void MainUIBackend::onPluginWindowClosed(const QString& n)    { m_uiPluginManager->onPluginWindowClosed(n); }
+void MainUIBackend::setCurrentVisibleApp(const QString& n)    { m_uiPluginManager->setCurrentVisibleApp(n); }
+
+// PackageCoordinator — package_manager IPC and package-lifecycle cascade.
+void MainUIBackend::installPluginFromPath(const QString& p)   { m_packageCoordinator->installPluginFromPath(p); }
+void MainUIBackend::openInstallPluginDialog()                 { m_packageCoordinator->openInstallPluginDialog(); }
+void MainUIBackend::uninstallUiModule(const QString& n)       { m_packageCoordinator->uninstallUiModule(n); }
+void MainUIBackend::uninstallCoreModule(const QString& n)     { m_packageCoordinator->uninstallCoreModule(n); }
+void MainUIBackend::confirmUninstallCascade(const QString& n) { m_packageCoordinator->confirmUninstallCascade(n); }
+void MainUIBackend::confirmInstall()                          { m_packageCoordinator->confirmInstall(); }
+void MainUIBackend::cancelInstall()                           { m_packageCoordinator->cancelInstall(); }
+
+// cancelPendingAction is the one slot that doesn't route to a single manager:
+// a pending action lives on either UIPluginManager (local unload cascade) or
+// PackageCoordinator (uninstall/upgrade cascade) but not both. Fan out to both —
+// the un-involved manager no-ops on name-mismatch. This preserves the QML
+// contract (single `backend.cancelPendingAction(name)` call for either dialog).
+void MainUIBackend::cancelPendingAction(const QString& n) {
+    m_uiPluginManager->cancelUnloadCascade(n);
+    m_packageCoordinator->cancelPendingAction(n);
 }
 
-void MainUIBackend::unloadCoreModule(const QString& moduleName)
-{
-    qDebug() << "Unloading core module:" << moduleName;
+// --- CoreModuleManager delegations ----------------------------------------
 
-    bool success = logos_core_unload_plugin(moduleName.toUtf8().constData()) == 1;
-
-    if (success) {
-        qDebug() << "Successfully unloaded core module:" << moduleName;
-        emit coreModulesChanged();
-    } else {
-        qDebug() << "Failed to unload core module:" << moduleName;
-    }
-}
-
-void MainUIBackend::refreshCoreModules()
-{
-    // Re-scan all plugin directories via logos_core C API
-    logos_core_refresh_plugins();
-
-    emit coreModulesChanged();
-}
-
-QString MainUIBackend::getCoreModuleMethods(const QString& moduleName)
-{
-    if (!m_logosAPI) {
-        return "[]";
-    }
-    
-    LogosAPIClient* client = m_logosAPI->getClient(moduleName);
-    if (!client || !client->isConnected()) {
-        return "[]";
-    }
-    
-    QVariant result = client->invokeRemoteMethod(moduleName, "getMethods");
-    if (result.canConvert<QJsonArray>()) {
-        QJsonArray methods = result.toJsonArray();
-        QJsonDocument doc(methods);
-        return doc.toJson(QJsonDocument::Compact);
-    }
-    
-    return "[]";
-}
-
-QString MainUIBackend::callCoreModuleMethod(const QString& moduleName, const QString& methodName, const QString& argsJson)
-{
-    if (!m_logosAPI) {
-        return "{\"error\": \"LogosAPI not available\"}";
-    }
-    
-    LogosAPIClient* client = m_logosAPI->getClient(moduleName);
-    if (!client || !client->isConnected()) {
-        return "{\"error\": \"Module not connected\"}";
-    }
-    
-    QJsonDocument argsDoc = QJsonDocument::fromJson(argsJson.toUtf8());
-    QJsonArray argsArray = argsDoc.array();
-    
-    QVariantList args;
-    for (const QJsonValue& val : argsArray) {
-        args.append(val.toVariant());
-    }
-    
-    QVariant result;
-    if (args.isEmpty()) {
-        result = client->invokeRemoteMethod(moduleName, methodName);
-    } else if (args.size() == 1) {
-        result = client->invokeRemoteMethod(moduleName, methodName, args[0]);
-    } else if (args.size() == 2) {
-        result = client->invokeRemoteMethod(moduleName, methodName, args[0], args[1]);
-    } else if (args.size() == 3) {
-        result = client->invokeRemoteMethod(moduleName, methodName, args[0], args[1], args[2]);
-    } else {
-        return "{\"error\": \"Too many arguments\"}";
-    }
-    
-    QJsonObject wrapper;
-    wrapper["result"] = QJsonValue::fromVariant(result);
-    QJsonDocument resultDoc(wrapper);
-    return resultDoc.toJson(QJsonDocument::Compact);
-}
-
-QVariantList MainUIBackend::launcherApps() const
-{
-    QVariantList apps;
-    QStringList availablePlugins = findAvailableUiPlugins();
-    
-    for (const QString& pluginName : availablePlugins) {
-        if (pluginName == "main_ui") {
-            continue;
-        }
-        
-        QVariantMap app;
-        app["name"] = pluginName;
-        app["isLoaded"] = m_loadedApps.contains(pluginName);
-        app["iconPath"] = getPluginIconPath(pluginName);
-        
-        apps.append(app);
-    }
-    
-    return apps;
-}
-
-void MainUIBackend::onAppLauncherClicked(const QString& appName)
-{
-    qDebug() << "App launcher clicked:" << appName;
-
-    setCurrentVisibleApp(appName);
-    if (m_loadedApps.contains(appName)) {
-        activateApp(appName);
-    } else {
-        loadUiModule(appName);
-    }
-}
-
-
-void MainUIBackend::openInstallPluginDialog()
-{
-    QString filter = "LGX Package (*.lgx);;All Files (*)";
-
-    QString filePath = QFileDialog::getOpenFileName(nullptr, tr("Select Plugin to Install"), QString(), filter);
-
-    if (!filePath.isEmpty()) {
-        installPluginFromPath(filePath);
-    }
-}
-
-void MainUIBackend::installPluginFromPath(const QString& filePath)
-{
-    LogosModules logos(m_logosAPI);
-
-    QPointer<MainUIBackend> self(this);
-    logos.package_manager.installPluginAsync(filePath, false, [self](QVariant result) {
-        if (!self) return;
-        Q_UNUSED(result);
-        self->refreshCoreModules();
-        self->fetchUiPluginMetadata();
-    });
-}
-
-
-QString MainUIBackend::getPluginType(const QString& name) const
-{
-    const auto it = m_uiPluginMetadata.constFind(name);
-    if (it != m_uiPluginMetadata.cend()) {
-        return it->value("type").toString();
-    }
-    return QString();
-}
-
-bool MainUIBackend::isQmlPlugin(const QString& name) const
-{
-    return getPluginType(name) == QStringLiteral("ui_qml");
-}
-
-QString MainUIBackend::resolveQmlViewPath(const QVariantMap& meta) const
-{
-    // ui_qml contract: "view" is the QML entry point, relative to installDir.
-    const QString installDir = meta.value("installDir").toString();
-    const QString viewField = meta.value("view").toString();
-    if (viewField.isEmpty()) return QString();
-    return QDir(installDir).filePath(viewField);
-}
-
-void MainUIBackend::loadLegacyUiModule(const QString& moduleName)
-{
-    if (m_pluginLoader->isLoading(moduleName)) {
-        qDebug() << "Module" << moduleName << "is already loading";
-        return;
-    }
-
-    PluginLoadRequest request;
-    request.name = moduleName;
-    request.type = UIPluginType::Legacy;
-    request.pluginPath = getPluginPath(moduleName);
-    request.iconPath = getPluginIconPath(moduleName, true);
-    if (m_uiPluginMetadata.contains(moduleName)) {
-        request.coreDependencies = m_uiPluginMetadata[moduleName].value("dependencies").toList();
-    }
-
-    m_pluginLoader->load(request);
-}
-
-bool MainUIBackend::hasBackendPlugin(const QString& name) const
-{
-    // True iff the ui_qml plugin ships a backend Qt plugin lib alongside its
-    // QML view. For QML-only ui_qml modules, mainFilePath is empty (no
-    // backend). When a backend is present, mainFilePath points at the .so/.dylib.
-    if (!isQmlPlugin(name)) return false;
-    const QString mainPath = m_uiPluginMetadata.value(name).value("mainFilePath").toString();
-    if (mainPath.isEmpty()) return false;
-    return mainPath.endsWith(QStringLiteral(".so"), Qt::CaseInsensitive)
-        || mainPath.endsWith(QStringLiteral(".dylib"), Qt::CaseInsensitive)
-        || mainPath.endsWith(QStringLiteral(".dll"), Qt::CaseInsensitive);
-}
-
-QStringList MainUIBackend::findAvailableUiPlugins() const
-{
-    return m_uiPluginMetadata.keys();
-}
-
-void MainUIBackend::fetchUiPluginMetadata()
-{
-    if (!m_logosAPI) return;
-
-    LogosModules logos(m_logosAPI);
-    QPointer<MainUIBackend> self(this);
-    logos.package_manager.getInstalledUiPluginsAsync([self](QVariantList uiPlugins) {
-        if (!self) return;
-        self->m_uiPluginMetadata.clear();
-        for (const QVariant& item : uiPlugins) {
-            QVariantMap pluginInfo = item.toMap();
-            QString name = pluginInfo.value("name").toString();
-            if (name.isEmpty()) continue;
-
-            // ui_qml requires "view" (the QML entry point); "main" is optional.
-            // Other types require "mainFilePath" (the backend lib).
-            const QString type = pluginInfo.value("type").toString();
-            if (type == QStringLiteral("ui_qml")) {
-                if (pluginInfo.value("view").toString().isEmpty()) continue;
-            } else {
-                if (pluginInfo.value("mainFilePath").toString().isEmpty()) continue;
-            }
-            self->m_uiPluginMetadata[name] = pluginInfo;
-        }
-        emit self->uiModulesChanged();
-        emit self->launcherAppsChanged();
-    });
-}
-
-QString MainUIBackend::getPluginPath(const QString& name) const
-{
-    // Only used by loadLegacyUiModule (type "ui"); ui_qml uses installDir + view.
-    const auto it = m_uiPluginMetadata.constFind(name);
-    if (it != m_uiPluginMetadata.cend()) {
-        return it->value("mainFilePath").toString();
-    }
-    return QString();
-}
-
-QString MainUIBackend::getPluginIconPath(const QString& pluginName, bool forWidgetIcon) const
-{
-    if (!m_uiPluginMetadata.contains(pluginName)) {
-        return "";
-    }
-
-    const QVariantMap& meta = m_uiPluginMetadata[pluginName];
-    QString iconPath = meta.value("icon").toString();
-    QString installDir = meta.value("installDir").toString();
-
-    if (iconPath.isEmpty()) {
-        return "";
-    }
-
-    QDir pluginDir(installDir);
-    QString filePath = pluginDir.filePath(iconPath.startsWith(":/") ? iconPath.mid(2) : iconPath);
-    bool exists = QFile::exists(filePath);
-
-    if (forWidgetIcon) {
-        if (exists) {
-            return filePath;
-        }
-        if (iconPath.startsWith(":/")) {
-            qWarning() << "Plugin icon not on disk, using resource path; expected:" << filePath;
-            return iconPath;
-        }
-        qWarning() << "Plugin icon not found, expected:" << filePath;
-        return QString();
-    }
-    return exists ? QUrl::fromLocalFile(filePath).toString() : (iconPath.startsWith(":/") ? "qrc" + iconPath : QString());
-}
-
-void MainUIBackend::updateModuleStats()
-{
-    char* stats_json = logos_core_get_module_stats();
-    if (!stats_json) {
-        return;
-    }
-    
-    QString jsonStr = QString::fromUtf8(stats_json);
-    QJsonDocument doc = QJsonDocument::fromJson(stats_json);
-    free(stats_json);
-    
-    if (doc.isNull()) {
-        qWarning() << "Failed to parse module stats JSON";
-        return;
-    }
-    
-    QJsonArray modulesArray;
-    if (doc.isArray()) {
-        modulesArray = doc.array();
-    } else if (doc.isObject()) {
-        QJsonObject root = doc.object();
-        modulesArray = root["modules"].toArray();
-    }
-    
-    for (const QJsonValue& val : modulesArray) {
-        QJsonObject moduleObj = val.toObject();
-        QString name = moduleObj["name"].toString();
-        
-        if (!name.isEmpty()) {
-            QVariantMap stats;
-            double cpu = moduleObj["cpu_percent"].toDouble();
-            if (cpu == 0) cpu = moduleObj["cpu"].toDouble();
-            
-            double memory = moduleObj["memory_mb"].toDouble();
-            if (memory == 0) memory = moduleObj["memory"].toDouble();
-            if (memory == 0) memory = moduleObj["memory_MB"].toDouble();
-            
-            stats["cpu"] = QString::number(cpu, 'f', 1);
-            stats["memory"] = QString::number(memory, 'f', 1);
-            m_moduleStats[name] = stats;
-        }
-    }
-    
-    emit coreModulesChanged();
-}
-
+void    MainUIBackend::refreshCoreModules()                         { m_coreModuleManager->refresh(); }
+QString MainUIBackend::getCoreModuleMethods(const QString& n)       { return m_coreModuleManager->getMethods(n); }
+QString MainUIBackend::callCoreModuleMethod(const QString& n,
+                                             const QString& m,
+                                             const QString& a)      { return m_coreModuleManager->callMethod(n, m, a); }
