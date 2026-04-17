@@ -18,6 +18,7 @@
 
 #include <memory>
 
+#include "CoreModuleManager.h"
 #include "IComponent.h"
 #include "LogosQmlBridge.h"
 #include "logos_api.h"
@@ -25,13 +26,12 @@
 #include "restricted/RestrictedUrlInterceptor.h"
 #include <ViewModuleHost.h>
 
-extern "C" {
-    int logos_core_load_plugin_with_dependencies(const char* plugin_name);
-}
-
-PluginLoader::PluginLoader(LogosAPI* logosAPI, QObject* parent)
+PluginLoader::PluginLoader(LogosAPI* logosAPI,
+                           CoreModuleManager* coreModuleManager,
+                           QObject* parent)
     : QObject(parent)
     , m_logosAPI(logosAPI)
+    , m_coreModuleManager(coreModuleManager)
 {
 }
 
@@ -87,11 +87,13 @@ void PluginLoader::startLoad(const PluginLoadRequest& request)
 void PluginLoader::loadCoreDependencies(const PluginLoadRequest& request)
 {
     // liblogos is not thread-safe for plugin loading; call only from the GUI thread.
+    // Every core-plugin load goes through CoreModuleManager so the logos_core_*
+    // C API is centralised in one place.
     for (const QVariant& dep : request.coreDependencies) {
         QString depName = dep.toString();
         if (!depName.isEmpty()) {
             qDebug() << "Loading core dependency for" << request.name << ":" << depName;
-            if (logos_core_load_plugin_with_dependencies(depName.toUtf8().constData()) != 1) {
+            if (!m_coreModuleManager || !m_coreModuleManager->loadPlugin(depName)) {
                 qWarning() << "Failed to load core dependency" << depName
                            << "for" << request.name;
                 setLoading(request.name, false);

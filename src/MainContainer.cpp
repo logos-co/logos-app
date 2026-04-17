@@ -23,6 +23,7 @@ MainContainer::MainContainer(LogosAPI* logosAPI, QWidget* parent)
     , m_contentStack(nullptr)
     , m_mdiView(nullptr)
     , m_contentWidget(nullptr)
+    , m_overlayWidget(nullptr)
 {
     // Set QML style
     QQuickStyle::setStyle("Basic");
@@ -157,12 +158,66 @@ void MainContainer::setupUi()
     // Add widgets to main layout
     m_mainLayout->addWidget(m_sidebarWidget);
     m_mainLayout->addWidget(contentArea, 1);
-    
+
+    // === OVERLAY DIALOGS (QML) ===
+    // Child of `this` but deliberately NOT added to m_mainLayout — we
+    // want it to float across the whole window, overlapping sidebar +
+    // content. resizeEvent keeps its geometry in sync with the parent.
+    m_overlayWidget = new QQuickWidget(this);
+    m_overlayWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    // Transparent clear so the sidebar + content stay visible through
+    // the overlay. The dialog itself paints its own opaque background.
+    m_overlayWidget->setAttribute(Qt::WA_AlwaysStackOnTop);
+    m_overlayWidget->setAttribute(Qt::WA_TranslucentBackground);
+    m_overlayWidget->setClearColor(Qt::transparent);
+    // Start transparent-to-input so the user can interact with the
+    // normal UI; flipped off in onOverlayActiveChanged while a dialog
+    // is visible so the dialog itself can receive clicks.
+    m_overlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    if (!qmlUiPath.isEmpty()) {
+        QString absPath = QDir(qmlUiPath).absolutePath();
+        m_overlayWidget->engine()->addImportPath(absPath + "/qml");
+        m_overlayWidget->engine()->addImportPath(absPath);
+    } else {
+        m_overlayWidget->engine()->addImportPath("qrc:/qml");
+    }
+    m_overlayWidget->rootContext()->setContextProperty("backend", m_backend);
+    m_overlayWidget->setSource(resolveQmlUrl("qml/views/OverlayDialogs.qml"));
+
+    // Hook up the QML signal that tracks "any dialog visible" so we can
+    // toggle mouse-passthrough on the overlay QQuickWidget.
+    if (QObject* overlayRoot = m_overlayWidget->rootObject()) {
+        connect(overlayRoot, SIGNAL(overlayActiveChanged(bool)),
+                this, SLOT(onOverlayActiveChanged(bool)));
+    }
+
     // Set initial state
     m_contentStack->setCurrentIndex(0); // Show MdiView by default
-    
+
     // Set reasonable minimum size
     setMinimumSize(800, 600);
+}
+
+void MainContainer::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (m_overlayWidget) {
+        m_overlayWidget->setGeometry(0, 0, width(), height());
+        // Qt re-stacks siblings on resize in some cases; keep the
+        // overlay on top explicitly.
+        m_overlayWidget->raise();
+    }
+}
+
+void MainContainer::onOverlayActiveChanged(bool active)
+{
+    if (!m_overlayWidget) return;
+    // When a dialog is open, the overlay must catch the click on the
+    // Cancel/Continue buttons — so make it opaque to input. When no
+    // dialog is showing, pass every click through to the sidebar /
+    // content behind it.
+    m_overlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents, !active);
+    if (active) m_overlayWidget->raise();
 }
 
 void MainContainer::onViewIndexChanged()

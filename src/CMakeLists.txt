@@ -111,6 +111,9 @@ set(SOURCES
     main_ui_plugin.cpp
     MainContainer.cpp
     MainUIBackend.cpp
+    CoreModuleManager.cpp
+    UIPluginManager.cpp
+    PackageCoordinator.cpp
     PluginLoader.cpp
     restricted/DenyAllReply.cpp
     restricted/DenyAllNetworkAccessManager.cpp

@@ -2,3 +2,4 @@ module controls
 SidebarIconButton 1.0 SidebarIconButton.qml
 SidebarCircleButton 1.0 SidebarCircleButton.qml
 SidebarAppDelegate 1.0 SidebarAppDelegate.qml
+ConfirmationDialog 1.0 ConfirmationDialog.qml

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Logos.Controls
+import panels
 
 Item {
     id: root
@@ -80,114 +81,149 @@ Item {
                 border.width: 1
 
                 ScrollView {
+                    id: scroll
                     anchors.fill: parent
                     anchors.margins: 20
                     clip: true
 
+                    // See UiModulesTab.qml for the rationale — `parent.width`
+                    // inside a Qt 6 ScrollView resolves against the internal
+                    // Flickable's contentItem, which can transiently collapse
+                    // to 0 during Repeater reflow. `availableWidth` is stable.
                     ColumnLayout {
-                        width: parent.width
+                        width: scroll.availableWidth
                         spacing: 8
 
                         Repeater {
                             model: backend.coreModules
 
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 50
-                                color: index % 2 === 0 ? "#363636" : "#2d2d2d"
-                                radius: 6
+                            // Row shell is shared with UiModulesTab. Column
+                            // rules: name absorbs slack via `Layout.fillWidth`
+                            // + elide so long names like
+                            // `liblogos_blockchain_module` don't bleed into
+                            // the status column. Every other column uses an
+                            // explicit `Layout.preferredWidth`.
+                            ModuleRow {
+                                rowIndex: index
+                                rowHeight: 50
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    spacing: 10
+                                // Plugin name — flex-sized.
+                                LogosText {
+                                    text: modelData.name
+                                    font.pixelSize: 16
+                                    color: "#e0e0e0"
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 80
+                                }
 
-                                    // Plugin name
-                                    LogosText {
-                                        text: modelData.name
-                                        font.pixelSize: 16
-                                        color: "#e0e0e0"
-                                        Layout.preferredWidth: 150
+                                // Status — fixed width so CPU/Mem columns
+                                // line up the same whether the row says
+                                // "(Loaded)" or "(Not Loaded)".
+                                LogosText {
+                                    text: modelData.isLoaded ? "(Loaded)" : "(Not Loaded)"
+                                    color: modelData.isLoaded ? "#4CAF50" : "#F44336"
+                                    Layout.preferredWidth: 100
+                                }
+
+                                // CPU (blank for not-loaded, but the column
+                                // stays so the row shape is stable).
+                                LogosText {
+                                    text: modelData.isLoaded ? "CPU: " + modelData.cpu + "%" : ""
+                                    color: "#64B5F6"
+                                    Layout.preferredWidth: 80
+                                }
+
+                                // Memory
+                                LogosText {
+                                    text: modelData.isLoaded ? "Mem: " + modelData.memory + " MB" : ""
+                                    color: "#81C784"
+                                    Layout.preferredWidth: 100
+                                }
+
+                                // Load/Unload button
+                                Button {
+                                    text: modelData.isLoaded ? "Unload Plugin" : "Load Plugin"
+
+                                    contentItem: LogosText {
+                                        text: parent.text
+                                        font.pixelSize: 12
+                                        color: "#ffffff"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
                                     }
 
-                                    // Status
-                                    LogosText {
-                                        text: modelData.isLoaded ? "(Loaded)" : "(Not Loaded)"
-                                        color: modelData.isLoaded ? "#4CAF50" : "#F44336"
+                                    background: Rectangle {
+                                        implicitWidth: 100
+                                        implicitHeight: 30
+                                        color: modelData.isLoaded ?
+                                            (parent.pressed ? "#da190b" : "#F44336") :
+                                            (parent.pressed ? "#3d8b40" : "#4b4b4b")
+                                        radius: 4
                                     }
 
-                                    // CPU (only for loaded)
-                                    LogosText {
-                                        text: modelData.isLoaded ? "CPU: " + modelData.cpu + "%" : ""
-                                        color: "#64B5F6"
-                                        Layout.preferredWidth: 80
-                                    }
-
-                                    // Memory (only for loaded)
-                                    LogosText {
-                                        text: modelData.isLoaded ? "Mem: " + modelData.memory + " MB" : ""
-                                        color: "#81C784"
-                                        Layout.preferredWidth: 100
-                                    }
-
-                                    Item { Layout.fillWidth: true }
-
-                                    // Load/Unload button
-                                    Button {
-                                        text: modelData.isLoaded ? "Unload Plugin" : "Load Plugin"
-                                        
-                                        contentItem: LogosText {
-                                            text: parent.text
-                                            font.pixelSize: 12
-                                            color: "#ffffff"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
-
-                                        background: Rectangle {
-                                            implicitWidth: 100
-                                            implicitHeight: 30
-                                            color: modelData.isLoaded ? 
-                                                (parent.pressed ? "#da190b" : "#F44336") :
-                                                (parent.pressed ? "#3d8b40" : "#4b4b4b")
-                                            radius: 4
-                                        }
-
-                                        onClicked: {
-                                            if (modelData.isLoaded) {
-                                                backend.unloadCoreModule(modelData.name)
-                                            } else {
-                                                backend.loadCoreModule(modelData.name)
-                                            }
+                                    onClicked: {
+                                        if (modelData.isLoaded) {
+                                            backend.unloadCoreModule(modelData.name)
+                                        } else {
+                                            backend.loadCoreModule(modelData.name)
                                         }
                                     }
+                                }
 
-                                    // View Methods button (only for loaded)
-                                    Button {
-                                        text: "View Methods"
-                                        visible: modelData.isLoaded
-                                        
-                                        contentItem: LogosText {
-                                            text: parent.text
-                                            font.pixelSize: 12
-                                            color: "#ffffff"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
+                                // View Methods button (only for loaded)
+                                Button {
+                                    text: "View Methods"
+                                    visible: modelData.isLoaded
 
-                                        background: Rectangle {
-                                            implicitWidth: 100
-                                            implicitHeight: 30
-                                            color: parent.pressed ? "#3d3d3d" : "#4b4b4b"
-                                            radius: 4
-                                        }
-
-                                        onClicked: {
-                                            root.selectedPlugin = modelData.name
-                                            root.showingMethods = true
-                                        }
+                                    contentItem: LogosText {
+                                        text: parent.text
+                                        font.pixelSize: 12
+                                        color: "#ffffff"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
                                     }
+
+                                    background: Rectangle {
+                                        implicitWidth: 100
+                                        implicitHeight: 30
+                                        color: parent.pressed ? "#3d3d3d" : "#4b4b4b"
+                                        radius: 4
+                                    }
+
+                                    onClicked: {
+                                        root.selectedPlugin = modelData.name
+                                        root.showingMethods = true
+                                    }
+                                }
+
+                                // Uninstall button — only shown for
+                                // user-installed core modules. Embedded
+                                // modules (package_manager, core_manager,
+                                // capability_module, etc. in release
+                                // builds) are structurally protected.
+                                // Backend also refuses non-user uninstalls
+                                // so an accidental rogue call is a no-op.
+                                Button {
+                                    text: "Uninstall"
+                                    visible: modelData.installType === "user"
+
+                                    contentItem: LogosText {
+                                        text: parent.text
+                                        font.pixelSize: 12
+                                        color: "#ffffff"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    background: Rectangle {
+                                        implicitWidth: 90
+                                        implicitHeight: 30
+                                        color: parent.pressed ? "#6d6d6d" : "#8b8b8b"
+                                        radius: 4
+                                    }
+
+                                    onClicked: backend.uninstallCoreModule(modelData.name)
                                 }
                             }
                         }
