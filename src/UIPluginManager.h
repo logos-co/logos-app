@@ -198,4 +198,13 @@ private:
 
     // Local unload-cascade pending slot.
     PendingUnload m_pendingUnload;
+
+    // Set by the destructor (and only the destructor) to tell
+    // unloadUiModule/unloadCoreModule to bypass the cascade-confirmation
+    // fast-path and tear down directly. Without this, the first loaded
+    // module with loaded dependents would early-return to emit
+    // unloadCascadeConfirmationRequested (into a tearing-down QML
+    // that can never call confirmUnloadCascade) and its widget/host
+    // would leak. Defaults to false.
+    bool m_shuttingDown = false;
 };

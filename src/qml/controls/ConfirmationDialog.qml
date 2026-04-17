@@ -522,10 +522,14 @@ Dialog {
     }
 
     onClosed: {
-        // Auto-cancel on Escape / outside-click for cascade modes so the
-        // pending state in the backend gets cleared. A button click sets
-        // _explicitClose before calling close(), so this only fires on
-        // dismissals that went through the Dialog's own close path.
+        // Auto-cancel on Escape and other Dialog-managed dismissals for
+        // cascade modes so the pending state in the backend gets cleared.
+        // closePolicy is Popup.CloseOnEscape only — outside-click does NOT
+        // dismiss these dialogs (they're destructive and require an
+        // explicit button). A button click sets _explicitClose before
+        // calling close(), so this onClosed handler only fires on
+        // dismissals that went through the Dialog's own close path
+        // (Escape today; any future policy additions as well).
         if (root._explicitClose) {
             root._explicitClose = false;
             return;

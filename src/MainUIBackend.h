@@ -7,8 +7,9 @@
 #include "logos_api.h"
 
 class CoreModuleManager;
-class UIPluginManager;
 class PackageCoordinator;
+class QWidget;
+class UIPluginManager;
 
 // MainUIBackend — thin QML-facing facade.
 //

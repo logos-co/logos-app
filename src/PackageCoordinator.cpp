@@ -13,6 +13,8 @@
 #include <QPointer>
 #include <QTimer>
 
+#include <memory>
+
 #include "logos_sdk.h"
 
 PackageCoordinator::PackageCoordinator(LogosAPI* logosAPI,

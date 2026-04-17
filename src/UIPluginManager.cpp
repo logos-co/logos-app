@@ -34,6 +34,16 @@ UIPluginManager::UIPluginManager(LogosAPI* logosAPI,
 
 UIPluginManager::~UIPluginManager()
 {
+    // Tell unloadUiModule/unloadCoreModule to bypass the cascade-
+    // confirmation fast-path — there's no user to confirm and no live
+    // QML layer to drive the dialog. Otherwise the first loaded module
+    // with loaded dependents would early-return at the
+    // unloadCascadeConfirmationRequested emit, leaving its widget/host
+    // leaked AND setting m_pendingUnload.active=true, which lets the
+    // subsequent iterations' cascade checks succeed vacuously without
+    // ever returning to finish the aborted one.
+    m_shuttingDown = true;
+
     // Tear down every in-process UI plugin widget before our members
     // disappear. Snapshot the keys from both maps since both legacy and
     // ui_qml plugins need to go.
@@ -222,7 +232,10 @@ void UIPluginManager::unloadUiModule(const QString& moduleName)
     //
     // Guard against re-entering the flow if we're already in a pending
     // cascade for a *different* module; otherwise we could lose state.
-    if (!m_pendingUnload.active) {
+    // Skip the cascade entirely during destruction — the QML that would
+    // drive the dialog is gone and we need to actually tear down, not
+    // await a confirmation that can never arrive.
+    if (!m_shuttingDown && !m_pendingUnload.active) {
         const QStringList loadedDeps = loadedDependentsOf(moduleName);
         if (!loadedDeps.isEmpty()) {
             m_pendingUnload = {true, moduleName};
@@ -340,7 +353,8 @@ void UIPluginManager::unloadCoreModule(const QString& moduleName)
     // on a core module with loaded dependents (core or UI) silently orphans
     // them. The confirmation dialog path is only engaged when there's at
     // least one loaded dependent, so leaf unloads still take the fast path.
-    if (!m_pendingUnload.active) {
+    // See unloadUiModule for why shutdown bypasses this.
+    if (!m_shuttingDown && !m_pendingUnload.active) {
         const QStringList loadedDeps = loadedDependentsOf(moduleName);
         if (!loadedDeps.isEmpty()) {
             m_pendingUnload = {true, moduleName};
