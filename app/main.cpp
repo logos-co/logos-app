@@ -3,6 +3,7 @@
 #include "token_manager.h"
 #include "logos_mode.h"
 #include "LogosBasecampPaths.h"
+#include "LogRedirector.h"
 #ifdef ENABLE_QML_INSPECTOR
 #include "inspectorserver.h"
 #endif
@@ -57,6 +58,13 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setOrganizationName("Logos");
     app.setApplicationName("LogosBasecamp");
+
+    // Redirect stdout/stderr to a rotating per-session log file under
+    // <baseDirectory>/logs. Must happen after setOrganizationName/setApplicationName
+    // so baseDirectory() resolves to the right location. Terminal output is
+    // preserved by mirroring to the original stdout.
+    LogosBasecampLog::LogRedirector::instance().start(
+        LogosBasecampPaths::logsDirectory());
 
     // Set up module directories for logos core.
     // 1. Embedded modules directory (pre-installed at build time, read-only)
@@ -174,6 +182,9 @@ int main(int argc, char *argv[])
 
     // Cleanup logos core (plugins, modules, etc.)
     logos_core_cleanup();
+
+    // Flush final output, restore original stdout/stderr, and close the log file.
+    LogosBasecampLog::LogRedirector::instance().stop();
 
     return result;
 }
