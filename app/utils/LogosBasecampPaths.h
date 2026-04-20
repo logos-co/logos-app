@@ -63,6 +63,12 @@ inline QString moduleDataDirectory()
     return baseDirectory() + "/module_data";
 }
 
+// Directory for app log files (stdout/stderr capture, rotated per session).
+inline QString logsDirectory()
+{
+    return baseDirectory() + "/logs";
+}
+
 // Embedded directories — read-only, pre-installed at build time alongside the binary.
 inline QString embeddedModulesDirectory()
 {
