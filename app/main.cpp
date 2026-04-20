@@ -63,8 +63,11 @@ int main(int argc, char *argv[])
     // <baseDirectory>/logs. Must happen after setOrganizationName/setApplicationName
     // so baseDirectory() resolves to the right location. Terminal output is
     // preserved by mirroring to the original stdout.
-    LogosBasecampLog::LogRedirector::instance().start(
-        LogosBasecampPaths::logsDirectory());
+    const QString logsDir = LogosBasecampPaths::logsDirectory();
+    if (!LogosBasecampLog::LogRedirector::instance().start(logsDir)) {
+        qWarning() << "Failed to start log redirection; continuing without file logs."
+                   << "Logs directory:" << logsDir;
+    }
 
     // Set up module directories for logos core.
     // 1. Embedded modules directory (pre-installed at build time, read-only)

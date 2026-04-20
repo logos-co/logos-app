@@ -50,16 +50,33 @@ bool LogRedirector::start(const QString& logsDir, int maxLinesPerFile)
     m_rotationIndex = 0;
     m_linesInCurrentFile = 0;
 
+    auto cleanup = [this]() {
+        if (m_originalStdout >= 0) { ::close(m_originalStdout); m_originalStdout = -1; }
+        if (m_originalStderr >= 0) { ::close(m_originalStderr); m_originalStderr = -1; }
+        if (m_currentFile) {
+            m_currentFile->close();
+            m_currentFile.reset();
+        }
+    };
+
     openNewFile();
-    if (!m_currentFile || !m_currentFile->isOpen())
+    if (!m_currentFile || !m_currentFile->isOpen()) {
+        cleanup();
         return false;
+    }
 
     m_originalStdout = ::dup(fileno(stdout));
     m_originalStderr = ::dup(fileno(stderr));
+    if (m_originalStdout < 0 || m_originalStderr < 0) {
+        cleanup();
+        return false;
+    }
 
     int fds[2];
-    if (::pipe(fds) != 0)
+    if (::pipe(fds) != 0) {
+        cleanup();
         return false;
+    }
 
     std::fflush(stdout);
     std::fflush(stderr);
@@ -68,6 +85,7 @@ bool LogRedirector::start(const QString& logsDir, int maxLinesPerFile)
         ::dup2(fds[1], fileno(stderr)) == -1) {
         ::close(fds[0]);
         ::close(fds[1]);
+        cleanup();
         return false;
     }
 
@@ -96,20 +114,20 @@ void LogRedirector::stop()
 
     // Restoring via dup2 closes the previous target fd, i.e. the pipe's
     // write end held by stdout/stderr. Once both are restored, the reader
-    // thread sees EOF on the read end and exits.
-    if (m_originalStdout >= 0) {
+    // thread sees EOF on the read end and exits. Keep the duplicated
+    // originals open until after the reader thread has finished, since
+    // readerLoop() may still be writing to m_originalStdout — closing it
+    // concurrently could race with fd-number reuse.
+    if (m_originalStdout >= 0)
         ::dup2(m_originalStdout, fileno(stdout));
-        ::close(m_originalStdout);
-        m_originalStdout = -1;
-    }
-    if (m_originalStderr >= 0) {
+    if (m_originalStderr >= 0)
         ::dup2(m_originalStderr, fileno(stderr));
-        ::close(m_originalStderr);
-        m_originalStderr = -1;
-    }
 
     if (m_readerThread.joinable())
         m_readerThread.join();
+
+    if (m_originalStdout >= 0) { ::close(m_originalStdout); m_originalStdout = -1; }
+    if (m_originalStderr >= 0) { ::close(m_originalStderr); m_originalStderr = -1; }
 
     if (m_readFd >= 0) {
         ::close(m_readFd);
@@ -192,8 +210,10 @@ void LogRedirector::readerLoop()
         }
         if (start < n && m_currentFile)
             m_currentFile->write(buf + start, n - start);
-        m_currentFile->flush();
     }
+
+    if (m_currentFile)
+        m_currentFile->flush();
 }
 
 #endif // Q_OS_WIN
