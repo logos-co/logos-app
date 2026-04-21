@@ -3,7 +3,7 @@
 
 {
   pname = "logos-basecamp";
-  version = "1.0.0";
+  version = pkgs.lib.removeSuffix "\n" (builtins.readFile ../VERSION);
   
   # Common native build inputs
   nativeBuildInputs = [ 
