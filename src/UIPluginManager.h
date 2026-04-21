@@ -174,6 +174,11 @@ private:
     QStringList loadedCorePlugins() const;
     QStringList loadedDependentsOf(const QString& name) const;
 
+    // Synchronous unload implementation — called directly from the shutdown
+    // path and from the QueuedConnection lambda in unloadUiModule. Never call
+    // this from a live QML signal handler; use unloadUiModule() instead.
+    void unloadUiModuleImpl(const QString& moduleName);
+
     // Wiring
     LogosAPI*          m_logosAPI;          // not owned
     CoreModuleManager* m_coreModuleManager; // not owned (sibling Qt child)

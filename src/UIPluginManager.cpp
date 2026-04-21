@@ -214,6 +214,32 @@ QStringList UIPluginManager::loadingModules() const
 
 void UIPluginManager::unloadUiModule(const QString& moduleName)
 {
+    if (m_shuttingDown) {
+        // Shutdown path: run synchronously — no QML signal handler is on
+        // the stack and we need the teardown to complete before Qt child
+        // destruction continues. The cascade guard below skips when
+        // m_shuttingDown is true, so this goes straight to teardown.
+        unloadUiModuleImpl(moduleName);
+        return;
+    }
+
+    // Normal path: defer the whole body — same rationale as loadCoreModule /
+    // unloadCoreModule. This slot is invoked from a QML Button.onClicked handler
+    // inside a Repeater delegate (e.g. UiModulesTab "Unload Plugin" button).
+    // Emitting uiModulesChanged() synchronously causes Repeater.setModel to fire,
+    // which calls clear() → setParentItem(nullptr) on every delegate, including
+    // the button that was just clicked. QQuickItemPrivate::derefWindow then
+    // crashes trying to walk that button's child tree while the window pointer
+    // on one of its children is already null.
+    // Deferring via QueuedConnection lets the click handler fully unwind first;
+    // by the time the lambda runs the Repeater delegate tree is stable again.
+    QMetaObject::invokeMethod(this, [this, moduleName]{
+        unloadUiModuleImpl(moduleName);
+    }, Qt::QueuedConnection);
+}
+
+void UIPluginManager::unloadUiModuleImpl(const QString& moduleName)
+{
     qDebug() << "Unloading UI module:" << moduleName;
 
     bool isQml = m_qmlPluginWidgets.contains(moduleName);
@@ -513,11 +539,11 @@ void UIPluginManager::confirmUnloadCascade(const QString& moduleName)
         }
 
         // The UI widget for the target itself still needs to be unloaded.
-        // Re-enter the normal path — m_pendingUnload is inactive, so the
-        // guard won't re-trigger. unloadUiModule itself defers to the next
-        // tick internally too, which is fine: the widget teardown just
-        // lands one more tick later.
-        unloadUiModule(moduleName);
+        // We're already inside a QueuedConnection lambda so the original
+        // click handler has returned — call the impl directly instead of
+        // scheduling another async hop. m_pendingUnload is inactive so the
+        // cascade guard in unloadUiModuleImpl won't re-trigger.
+        unloadUiModuleImpl(moduleName);
 
         // Stats may have shifted; the deferred-emit block that followed
         // below handles the QML-notification side.
