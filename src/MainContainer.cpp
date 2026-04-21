@@ -51,11 +51,22 @@ MainContainer::MainContainer(LogosAPI* logosAPI, QWidget* parent)
     connect(m_mdiView, &MdiView::pluginWindowClosed,
             m_backend, &MainUIBackend::onPluginWindowClosed);
 
-    // Connect to QML signals from SidebarPanel
+    // Connect to QML signals from SidebarPanel.
+    //
+    // launchUIModule uses QueuedConnection — the signal is emitted from a
+    // SidebarAppDelegate.onClicked handler inside a Repeater delegate.
+    // onAppLauncherClicked calls setCurrentVisibleApp which synchronously
+    // emits launcherAppsChanged, causing both sidebar Repeaters to reset
+    // their models. If the connection were direct the Repeater would call
+    // setParentItem(nullptr) on the clicked delegate while its click handler
+    // is still on the call stack, leading to a null deref in
+    // QQuickItemPrivate::derefWindow. Queuing the call lets the click handler
+    // return before any Repeater model update fires.
     QObject* sidebarRoot = m_sidebarWidget->rootObject();
     if (sidebarRoot) {
         connect(sidebarRoot, SIGNAL(launchUIModule(QString)),
-                m_backend, SLOT(onAppLauncherClicked(QString)));
+                m_backend, SLOT(onAppLauncherClicked(QString)),
+                Qt::QueuedConnection);
         connect(sidebarRoot, SIGNAL(updateLauncherIndex(int)),
                 m_backend, SLOT(setCurrentActiveSectionIndex(int)));
     }
