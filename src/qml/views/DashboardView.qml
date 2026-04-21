@@ -33,7 +33,7 @@ Item {
                 spacing: 6
 
                 LogosText {
-                    visible: backend.isPortableBuild && backend.buildVersion.length > 0
+                    visible: backend.buildVersion.length > 0
                     text: "Version " + backend.buildVersion
                     font.pixelSize: 18
                     color: "#ffffff"

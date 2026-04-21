@@ -3,7 +3,10 @@
 
 {
   pname = "logos-basecamp";
-  version = pkgs.lib.removeSuffix "\n" (builtins.readFile ../VERSION);
+  # VERSION is only present on release branches; dev branches use a placeholder.
+  version = if builtins.pathExists ../VERSION
+    then pkgs.lib.removeSuffix "\n" (builtins.readFile ../VERSION)
+    else "0.0.0-dev";
   
   # Common native build inputs
   nativeBuildInputs = [ 

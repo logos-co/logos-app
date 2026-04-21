@@ -43,7 +43,11 @@
       # changes or is overridden via a path input.
       revOf = input: input.rev or input.dirtyRev or "dirty";
       buildInfo = {
-        version = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
+        # VERSION is only present on release branches; absent = empty string
+        # (Dashboard hides the version line when empty).
+        version = if builtins.pathExists ./VERSION
+          then nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION)
+          else "";
         commits = [
           { name = "logos-basecamp"; commit = revOf self; }
           { name = "logos-nix"; commit = revOf logos-nix; }
