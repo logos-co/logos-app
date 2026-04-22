@@ -17,14 +17,11 @@ constexpr bool isPortableBuild()
 #endif
 }
 
-// Base data directory. LOGOS_DATA_DIR overrides QStandardPaths so tests and
-// CI can redirect writes to a writable path (e.g. the Nix build output dir)
-// without relying on the system home directory.
+// Base data directory from QStandardPaths. Only consumed by the
+// portable/non-portable selection in baseDirectory(); callers that need an
+// explicit override (tests, CI, --user-dir) go through LOGOS_USER_DIR instead.
 inline QString dataDirectory()
 {
-    const QString override = qEnvironmentVariable("LOGOS_DATA_DIR");
-    if (!override.isEmpty())
-        return override;
     return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 }
 
@@ -42,6 +39,12 @@ inline QString nonPortableBaseDirectory()
 
 inline QString baseDirectory()
 {
+    // LOGOS_USER_DIR overrides the base directory as-is, bypassing the
+    // portable/non-portable selection and the "Dev" suffix. Set by --user-dir
+    // so callers get the exact path they asked for.
+    const QString baseOverride = qEnvironmentVariable("LOGOS_USER_DIR");
+    if (!baseOverride.isEmpty())
+        return baseOverride;
     return isPortableBuild() ? portableBaseDirectory() : nonPortableBaseDirectory();
 }
 

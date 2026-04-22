@@ -63,11 +63,12 @@ int main(int argc, char *argv[])
     app.setOrganizationName("Logos");
     app.setApplicationName("LogosBasecamp");
 
-    // Parse --user-dir / -u and set LOGOS_DATA_DIR before anything else resolves
+    // Parse --user-dir / -u and set LOGOS_USER_DIR before anything else resolves
     // a path. This lets multiple Basecamp instances run side-by-side against
-    // isolated data trees (plugins, modules, module_data, logs). parse() rather
-    // than process() so unrecognised flags (e.g. Qt's own -platform, -style)
-    // don't abort startup.
+    // isolated data trees (plugins, modules, module_data, logs). LOGOS_USER_DIR
+    // overrides baseDirectory() as-is (no "Dev" suffix), so the user gets the
+    // exact path they asked for. parse() rather than process() so unrecognised
+    // flags (e.g. Qt's own -platform, -style) don't abort startup.
     {
         QCommandLineParser parser;
         QCommandLineOption userDirOption({"u", "user-dir"},
@@ -75,12 +76,25 @@ int main(int argc, char *argv[])
                            "modules, module_data, logs for this instance)."),
             QStringLiteral("path"));
         parser.addOption(userDirOption);
-        parser.parse(app.arguments());
+        if (!parser.parse(app.arguments())) {
+            std::cerr << parser.errorText().toStdString() << std::endl;
+            return 1;
+        }
         if (parser.isSet(userDirOption)) {
             const QString absUserDir =
                 QFileInfo(parser.value(userDirOption)).absoluteFilePath();
-            QDir().mkpath(absUserDir);
-            qputenv("LOGOS_DATA_DIR", absUserDir.toUtf8());
+            QFileInfo userDirInfo(absUserDir);
+            if (userDirInfo.exists() && !userDirInfo.isDir()) {
+                qCritical() << "The --user-dir path exists but is not a directory:"
+                            << absUserDir;
+                return 1;
+            }
+            if (!userDirInfo.exists() && !QDir().mkpath(absUserDir)) {
+                qCritical() << "Failed to create --user-dir directory:"
+                            << absUserDir;
+                return 1;
+            }
+            qputenv("LOGOS_USER_DIR", absUserDir.toUtf8());
         }
     }
 

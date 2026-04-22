@@ -57,6 +57,18 @@ open result/LogosBasecamp.app
 ```
 
 
+#### Parallel Instances (`--user-dir`)
+
+`--user-dir <path>` (or `-u`) sets the base directory so multiple Basecamp instances can run side-by-side with isolated `plugins/`, `modules/`, `module_data/`, and `logs/`. The path is used verbatim.
+
+```bash
+# Two instances with isolated state
+./result/bin/LogosBasecamp --user-dir /tmp/basecamp-a &
+./result/bin/LogosBasecamp --user-dir /tmp/basecamp-b &
+```
+
+Equivalent to setting the `LOGOS_USER_DIR` env var.
+
 #### Development Shell
 
 ```bash

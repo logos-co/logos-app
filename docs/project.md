@@ -577,7 +577,7 @@ cmake --build . -j$(nproc)
 
 | Variable | Purpose |
 |----------|---------|
-| `LOGOS_DATA_DIR` | Override application data directory |
+| `LOGOS_USER_DIR` | Override application base directory as-is (also settable via `--user-dir`) |
 | `QML_INSPECTOR_PORT` | QML inspector server port (default: 3768) |
 
 ## Testing

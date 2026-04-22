@@ -24,8 +24,8 @@ pkgs.runCommand "logos-basecamp-smoke-test" {
 } ''
 
   mkdir -p $out
-  export LOGOS_DATA_DIR="$out/app-data"
-  mkdir -p "$LOGOS_DATA_DIR"
+  export LOGOS_USER_DIR="$out/app-data"
+  mkdir -p "$LOGOS_USER_DIR"
 
   export QT_QPA_PLATFORM=offscreen
   export QT_FORCE_STDERR_LOGGING=1
