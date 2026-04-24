@@ -358,8 +358,8 @@ void UIPluginManager::onPluginWindowClosed(const QString& pluginName)
 void UIPluginManager::loadCoreModule(const QString& moduleName)
 {
     // Defer the ENTIRE body — not just the emit. Callers are typically
-    // QML Button.onClicked handlers, and m_coreModuleManager->loadPlugin
-    // ultimately calls logos_core_load_plugin_with_dependencies, which
+    // QML Button.onClicked handlers, and m_coreModuleManager->loadModule
+    // ultimately calls logos_core_load_module_with_dependencies, which
     // internally spins a nested Qt event loop (via
     // QConnectedReplicaImplementation::waitForSource during the
     // informModuleToken round-trip, see liblogos_core). Running that
@@ -373,7 +373,7 @@ void UIPluginManager::loadCoreModule(const QString& moduleName)
         qDebug() << "Loading core module:" << moduleName;
 
         bool success = m_coreModuleManager
-                     ? m_coreModuleManager->loadPlugin(moduleName)
+                     ? m_coreModuleManager->loadModule(moduleName)
                      : false;
 
         if (success) {
@@ -393,7 +393,7 @@ void UIPluginManager::unloadCoreModule(const QString& moduleName)
     if (m_shuttingDown) {
         qDebug() << "Unloading core module:" << moduleName;
         if (m_coreModuleManager) {
-            bool success = m_coreModuleManager->unloadPlugin(moduleName);
+            bool success = m_coreModuleManager->unloadModule(moduleName);
             if (success) qDebug() << "Successfully unloaded core module:" << moduleName;
             else         qDebug() << "Failed to unload core module:" << moduleName;
         }
@@ -401,7 +401,7 @@ void UIPluginManager::unloadCoreModule(const QString& moduleName)
     }
 
     // Normal path: defer the whole body — same rationale as loadCoreModule.
-    // m_coreModuleManager->unloadPlugin → logos_core_unload_plugin spins a
+    // m_coreModuleManager->unloadModule → logos_core_unload_module spins a
     // nested event loop inside the QRemoteObjects teardown handshake, and
     // this slot is typically invoked from a QML Button.onClicked. Running
     // the nested loop while the click handler is still on the stack is
@@ -427,7 +427,7 @@ void UIPluginManager::unloadCoreModule(const QString& moduleName)
         }
 
         bool success = m_coreModuleManager
-                     ? m_coreModuleManager->unloadPlugin(moduleName)
+                     ? m_coreModuleManager->unloadModule(moduleName)
                      : false;
 
         if (success) {
@@ -507,25 +507,25 @@ void UIPluginManager::confirmUnloadCascade(const QString& moduleName)
 
     // Defer the cascade body — same rationale as loadCoreModule /
     // unloadCoreModule. confirmUnloadCascade is invoked from the cascade
-    // dialog's "Continue" Button.onClicked, and unloadPluginWithDependents
+    // dialog's "Continue" Button.onClicked, and unloadModuleWithDependents
     // spins a nested Qt event loop inside the QRemoteObjects teardown.
     // Running that while the click handler is still on the stack would
     // trip the QQmlData::destroyed qFatal.
     QMetaObject::invokeMethod(this, [this, moduleName]{
         // Snapshot the loaded-dependents list BEFORE the cascade runs. Once
-        // unloadPluginWithDependents returns, the target is off the loaded-
-        // plugins list and loadedDependentsOf would come up empty. UI-plugin
+        // unloadModuleWithDependents returns, the target is off the loaded-
+        // modules list and loadedDependentsOf would come up empty. UI-plugin
         // dependents need teardown here in-process — the core cascade only
-        // kills core plugins (QProcess termination). Without this pass,
+        // kills core modules (QProcess termination). Without this pass,
         // accounts_ui stays wired to a now-dead accounts_module.
         const QStringList loadedDeps = loadedDependentsOf(moduleName);
 
         qDebug() << "Cascade-unloading" << moduleName;
         bool ok = m_coreModuleManager
-                ? m_coreModuleManager->unloadPluginWithDependents(moduleName)
+                ? m_coreModuleManager->unloadModuleWithDependents(moduleName)
                 : false;
         if (!ok) {
-            qWarning() << "unloadPluginWithDependents failed for" << moduleName;
+            qWarning() << "unloadModuleWithDependents failed for" << moduleName;
             // Don't tear down the UI widget either — the core plugin is
             // still running somewhere and the widget would end up orphaned.
             return;
@@ -665,7 +665,7 @@ QStringList UIPluginManager::findAvailableUiPlugins() const
 
 QStringList UIPluginManager::loadedCorePlugins() const
 {
-    return m_coreModuleManager ? m_coreModuleManager->loadedPlugins() : QStringList{};
+    return m_coreModuleManager ? m_coreModuleManager->loadedModules() : QStringList{};
 }
 
 QStringList UIPluginManager::loadedDependentsOf(const QString& name) const
@@ -679,7 +679,7 @@ QStringList UIPluginManager::loadedDependentsOf(const QString& name) const
     // liblogos) OR currently mounted as a UI plugin in this Basecamp instance
     // (tracked by m_loadedUiModules / m_qmlPluginWidgets). Without this
     // second source, a UI plugin like wallet_ui that depends on wallet_module
-    // never registered in `logos_core_get_loaded_plugins()` would silently
+    // never registered in `logos_core_get_loaded_modules()` would silently
     // disappear from the cascade dialog — making the unload look "safe"
     // when in fact wallet_ui is still mounted and would orphan.
     const QStringList loadedCore = loadedCorePlugins();

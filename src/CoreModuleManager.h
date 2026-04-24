@@ -11,7 +11,7 @@ class QTimer;
 
 // CoreModuleManager — single owner of the logos_core_* C API.
 //
-// Every call into liblogos (known/loaded plugin lists, load/unload, cascade
+// Every call into liblogos (known/loaded module lists, load/unload, cascade
 // unload, stats) funnels through this class. Everything else in the app
 // (UIPluginManager, PackageManager, MainUIBackend) uses these thin wrappers and never touches
 // the C API directly.
@@ -34,20 +34,20 @@ public:
     // Thin C API wrappers — each is a one-liner over the corresponding
     // logos_core_* call with char*/QStringList marshalling. Callers get
     // cooked Qt types; they never see a raw C string.
-    QStringList knownPlugins() const;
-    QStringList loadedPlugins() const;
-    // Returns true on success. Wraps logos_core_load_plugin_with_dependencies
+    QStringList knownModules() const;
+    QStringList loadedModules() const;
+    // Returns true on success. Wraps logos_core_load_module_with_dependencies
     // (the C API function that also resolves forward deps before loading).
-    bool loadPlugin(const QString& name);
-    // Returns true on success. Wraps logos_core_unload_plugin — this does NOT
+    bool loadModule(const QString& name);
+    // Returns true on success. Wraps logos_core_unload_module — this does NOT
     // cascade. Caller is responsible for cascade semantics (see
-    // unloadPluginWithDependents).
-    bool unloadPlugin(const QString& name);
-    // Cascade variant — tears down `name` and all currently-loaded plugins
+    // unloadModuleWithDependents).
+    bool unloadModule(const QString& name);
+    // Cascade variant — tears down `name` and all currently-loaded modules
     // that depend on it, leaves-first. Returns true on full success; false
     // if any individual unload step failed (the cascade may have made
     // progress — callers should still refresh their UI state).
-    bool unloadPluginWithDependents(const QString& name);
+    bool unloadModuleWithDependents(const QString& name);
 
     // Cached stats as of the last timer tick (may be up to ~2s stale). Empty
     // entries for modules the poller hasn't seen yet. QML renders "0.0" via

@@ -15,22 +15,22 @@
 // typed wrappers above.
 extern "C" {
     char* logos_core_get_module_stats();
-    char** logos_core_get_known_plugins();
-    char** logos_core_get_loaded_plugins();
-    int logos_core_load_plugin_with_dependencies(const char* plugin_name);
-    int logos_core_unload_plugin(const char* plugin_name);
-    // Cascade unload: tears down `plugin_name` and all currently-loaded
-    // plugins that depend on it, in leaves-first order. Returns 1 on full
+    char** logos_core_get_known_modules();
+    char** logos_core_get_loaded_modules();
+    int logos_core_load_module_with_dependencies(const char* module_name);
+    int logos_core_unload_module(const char* module_name);
+    // Cascade unload: tears down `module_name` and all currently-loaded
+    // modules that depend on it, in leaves-first order. Returns 1 on full
     // success, 0 on any failure. Remote mode only — a no-op in Local mode
     // today (Basecamp gates the UI off there).
-    int logos_core_unload_plugin_with_dependents(const char* plugin_name);
-    void logos_core_refresh_plugins();
+    int logos_core_unload_module_with_dependents(const char* module_name);
+    void logos_core_refresh_modules();
 }
 
 namespace {
 
 // Drain a NULL-terminated char** handed back by the lib and free every entry
-// plus the outer array. Used by the knownPlugins / loadedPlugins wrappers.
+// plus the outer array. Used by the knownModules / loadedModules wrappers.
 QStringList drainCStringArray(char** arr)
 {
     QStringList out;
@@ -63,29 +63,29 @@ CoreModuleManager::~CoreModuleManager()
     if (m_statsTimer) m_statsTimer->stop();
 }
 
-QStringList CoreModuleManager::knownPlugins() const
+QStringList CoreModuleManager::knownModules() const
 {
-    return drainCStringArray(logos_core_get_known_plugins());
+    return drainCStringArray(logos_core_get_known_modules());
 }
 
-QStringList CoreModuleManager::loadedPlugins() const
+QStringList CoreModuleManager::loadedModules() const
 {
-    return drainCStringArray(logos_core_get_loaded_plugins());
+    return drainCStringArray(logos_core_get_loaded_modules());
 }
 
-bool CoreModuleManager::loadPlugin(const QString& name)
+bool CoreModuleManager::loadModule(const QString& name)
 {
-    return logos_core_load_plugin_with_dependencies(name.toUtf8().constData()) == 1;
+    return logos_core_load_module_with_dependencies(name.toUtf8().constData()) == 1;
 }
 
-bool CoreModuleManager::unloadPlugin(const QString& name)
+bool CoreModuleManager::unloadModule(const QString& name)
 {
-    return logos_core_unload_plugin(name.toUtf8().constData()) == 1;
+    return logos_core_unload_module(name.toUtf8().constData()) == 1;
 }
 
-bool CoreModuleManager::unloadPluginWithDependents(const QString& name)
+bool CoreModuleManager::unloadModuleWithDependents(const QString& name)
 {
-    return logos_core_unload_plugin_with_dependents(name.toUtf8().constData()) == 1;
+    return logos_core_unload_module_with_dependents(name.toUtf8().constData()) == 1;
 }
 
 QVariantMap CoreModuleManager::moduleStats(const QString& name) const
@@ -97,7 +97,7 @@ void CoreModuleManager::refresh()
 {
     // Re-scan all plugin directories via the lib, then let the Modules tab
     // re-read the composed list through Q_PROPERTY.
-    logos_core_refresh_plugins();
+    logos_core_refresh_modules();
     emit coreModulesChanged();
 }
 

@@ -93,7 +93,7 @@ void PluginLoader::loadCoreDependencies(const PluginLoadRequest& request)
         QString depName = dep.toString();
         if (!depName.isEmpty()) {
             qDebug() << "Loading core dependency for" << request.name << ":" << depName;
-            if (!m_coreModuleManager || !m_coreModuleManager->loadPlugin(depName)) {
+            if (!m_coreModuleManager || !m_coreModuleManager->loadModule(depName)) {
                 qWarning() << "Failed to load core dependency" << depName
                            << "for" << request.name;
                 setLoading(request.name, false);

@@ -95,7 +95,7 @@ test("counter_qml: open app", async (app) => {
 // Regression test: navigating to the Core Modules tab must show
 // auto-loaded core modules (package_manager, capability_module) as
 // "(Loaded)", not "(Not Loaded)". The bug we hit was that
-// MainUIBackend::refreshCoreModules() called logos_core_refresh_plugins(),
+// MainUIBackend::refreshCoreModules() called logos_core_refresh_modules(),
 // which re-ran PluginRegistry::discoverInstalledModules() and wiped the
 // `loaded` flag of every plugin via `m_plugins.insert(qName, freshInfo)`.
 // The whole list then rendered as Not Loaded with no CPU/Mem stats.

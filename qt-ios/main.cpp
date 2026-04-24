@@ -111,7 +111,7 @@ public:
         m_loadedPlugins.clear();
         m_knownPlugins.clear();
         
-        char** plugins = logos_core_get_loaded_plugins();
+        char** plugins = logos_core_get_loaded_modules();
         if (plugins) {
             for (int i = 0; plugins[i] != nullptr; i++) {
                 m_loadedPlugins.append(QString::fromUtf8(plugins[i]));
@@ -120,7 +120,7 @@ public:
             free(plugins);
         }
         
-        char** known = logos_core_get_known_plugins();
+        char** known = logos_core_get_known_modules();
         if (known) {
             for (int i = 0; known[i] != nullptr; i++) {
                 m_knownPlugins.append(QString::fromUtf8(known[i]));
@@ -143,7 +143,7 @@ public:
         }
         
         setStatus(QString("Loading plugin: %1...").arg(name));
-        int result = logos_core_load_plugin(name.toUtf8().constData());
+        int result = logos_core_load_module(name.toUtf8().constData());
         
         if (result) {
             setStatus(QString("Successfully loaded: %1").arg(name));

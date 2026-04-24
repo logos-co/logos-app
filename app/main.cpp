@@ -31,14 +31,14 @@
 
 // Replace CoreManager with direct C API functions
 extern "C" {
-    void logos_core_set_plugins_dir(const char* plugins_dir);
-    void logos_core_add_plugins_dir(const char* plugins_dir);
+    void logos_core_set_modules_dir(const char* modules_dir);
+    void logos_core_add_modules_dir(const char* modules_dir);
     void logos_core_set_persistence_base_path(const char* path);
     void logos_core_start();
     void logos_core_cleanup();
-    char** logos_core_get_loaded_plugins();
-    int logos_core_load_plugin(const char* plugin_name);
-    char* logos_core_process_plugin(const char* plugin_path);
+    char** logos_core_get_loaded_modules();
+    int logos_core_load_module(const char* module_name);
+    char* logos_core_process_module(const char* module_path);
     char* logos_core_get_module_stats();
 }
 
@@ -117,11 +117,11 @@ int main(int argc, char *argv[])
     // Set up module directories for logos core.
     // 1. Embedded modules directory (pre-installed at build time, read-only)
     QString embeddedModulesDir = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules");
-    logos_core_set_plugins_dir(embeddedModulesDir.toUtf8().constData());
+    logos_core_set_modules_dir(embeddedModulesDir.toUtf8().constData());
 
     // 2. User-writable modules directory (for runtime installs via the package store)
     QString userModulesDir = LogosBasecampPaths::modulesDirectory();
-    logos_core_add_plugins_dir(userModulesDir.toUtf8().constData());
+    logos_core_add_modules_dir(userModulesDir.toUtf8().constData());
 
     // Set persistence base path for core modules
     logos_core_set_persistence_base_path(
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
     logos_core_start();
     std::cout << "Logos Core started successfully!" << std::endl;
 
-    bool loaded = logos_core_load_plugin("package_manager");
+    bool loaded = logos_core_load_module("package_manager");
 
     if (loaded) {
         qInfo() << "package_manager plugin loaded by default.";
@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
     }
 
     // Print loaded plugins initially
-    char** loadedPlugins = logos_core_get_loaded_plugins();
+    char** loadedPlugins = logos_core_get_loaded_modules();
     QStringList plugins = convertPluginsToStringList(loadedPlugins);
 
     if (plugins.isEmpty()) {
