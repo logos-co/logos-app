@@ -154,8 +154,8 @@ QVariantList MainUIBackend::coreModules() const
     QVariantList modules;
     if (!m_coreModuleManager) return modules;
 
-    const QStringList known  = m_coreModuleManager->knownPlugins();
-    const QStringList loaded = m_coreModuleManager->loadedPlugins();
+    const QStringList known  = m_coreModuleManager->knownModules();
+    const QStringList loaded = m_coreModuleManager->loadedModules();
 
     for (const QString& name : known) {
         QVariantMap module;

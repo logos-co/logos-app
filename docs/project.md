@@ -131,21 +131,21 @@ All `logos_core_*` calls are made from two locations: `app/main.cpp` (startup/sh
 
 | Call | Purpose |
 |------|---------|
-| `logos_core_set_plugins_dir(embeddedDir)` | Set the primary plugin directory (read-only embedded modules) |
-| `logos_core_add_plugins_dir(userDir)` | Add the user-writable plugin directory for runtime installs |
-| `logos_core_start()` | Scan plugin directories, initialize the capability module, start the remote object registry |
-| `logos_core_load_plugin("package_manager")` | Auto-load the package manager module at startup |
-| `logos_core_get_loaded_plugins()` | Query loaded module names for initial status display |
+| `logos_core_set_modules_dir(embeddedDir)` | Set the primary modules directory (read-only embedded modules) |
+| `logos_core_add_modules_dir(userDir)` | Add the user-writable modules directory for runtime installs |
+| `logos_core_start()` | Scan module directories, initialize the capability module, start the remote object registry |
+| `logos_core_load_module("package_manager")` | Auto-load the package manager module at startup |
+| `logos_core_get_loaded_modules()` | Query loaded module names for initial status display |
 
 **Runtime Logos Module management** (`src/MainUIBackend.cpp`):
 
 | Call | Purpose |
 |------|---------|
-| `logos_core_load_plugin_with_dependencies(name)` | Load a Logos Module and all its declared dependencies (topological sort). Also called when loading a UI App that depends on Logos Modules. |
-| `logos_core_unload_plugin(name)` | Terminate a Logos Module's host process and clean up |
-| `logos_core_refresh_plugins()` | Re-scan module directories after a package install |
-| `logos_core_get_loaded_plugins()` | Query which Logos Modules are currently running (for Modules view status) |
-| `logos_core_get_known_plugins()` | Query all discovered Logos Modules (for Modules view listing) |
+| `logos_core_load_module_with_dependencies(name)` | Load a Logos Module and all its declared dependencies (topological sort). Also called when loading a UI App that depends on Logos Modules. |
+| `logos_core_unload_module(name)` | Terminate a Logos Module's host process and clean up |
+| `logos_core_refresh_modules()` | Re-scan module directories after a package install |
+| `logos_core_get_loaded_modules()` | Query which Logos Modules are currently running (for Modules view status) |
+| `logos_core_get_known_modules()` | Query all discovered Logos Modules (for Modules view listing) |
 | `logos_core_get_module_stats()` | Get JSON-formatted CPU/memory stats for all loaded Logos Modules (polled every 2s) |
 
 **Shutdown** (`app/main.cpp`):
@@ -210,11 +210,11 @@ logos.package_manager.on("corePluginFileInstalled", [](const QVariantList& data)
 
 | Method | Description |
 |--------|-------------|
-| `loadUiModule(name)` | Load a UI App (QML or C++ plugin) — resolve Logos Module dependencies via `logos_core_load_plugin_with_dependencies()`, then load the Qt plugin and create a tab in MDI |
+| `loadUiModule(name)` | Load a UI App (QML or C++ plugin) — resolve Logos Module dependencies via `logos_core_load_module_with_dependencies()`, then load the Qt plugin and create a tab in MDI |
 | `unloadUiModule(name)` | Remove tab from MDI, destroy widget, clean up tracking state. Logos Module dependencies are left running. |
-| `loadCoreModule(name)` | Load a Logos Module via `logos_core_load_plugin_with_dependencies()`, spawning a `logos_host` process |
-| `unloadCoreModule(name)` | Unload a Logos Module via `logos_core_unload_plugin()`, terminating its host process |
-| `refreshCoreModules()` | Call `logos_core_refresh_plugins()` then `logos_core_get_known_plugins()` to refresh the Logos Module list |
+| `loadCoreModule(name)` | Load a Logos Module via `logos_core_load_module_with_dependencies()`, spawning a `logos_host` process |
+| `unloadCoreModule(name)` | Unload a Logos Module via `logos_core_unload_module()`, terminating its host process |
+| `refreshCoreModules()` | Call `logos_core_refresh_modules()` then `logos_core_get_known_modules()` to refresh the Logos Module list |
 | `updateModuleStats()` | Call `logos_core_get_module_stats()`, parse JSON, update `m_moduleStats` map for Logos Modules |
 | `subscribeToPackageInstallationEvents()` | Register event listeners on `package_manager` Logos Module for `corePluginFileInstalled` and `uiPluginFileInstalled` events |
 | `fetchUiPluginMetadata()` | Async call to `package_manager.getInstalledUiPluginsAsync()` to populate UI App metadata cache |
@@ -304,11 +304,11 @@ The bridge validates that the `LogosAPI` is available and the target Logos Modul
 ```
 main()
  ├─ QApplication(argc, argv)
- ├─ logos_core_set_plugins_dir(<app>/../modules)       # Embedded modules (read-only)
- ├─ logos_core_add_plugins_dir(~/.local/share/.../modules)  # User modules (writable)
+ ├─ logos_core_set_modules_dir(<app>/../modules)       # Embedded modules (read-only)
+ ├─ logos_core_add_modules_dir(~/.local/share/.../modules)  # User modules (writable)
  ├─ logos_core_start()                                 # Scan dirs, init capability module, start registry
- ├─ logos_core_load_plugin("package_manager")          # Auto-load package manager
- ├─ logos_core_get_loaded_plugins()                    # Log loaded modules
+ ├─ logos_core_load_module("package_manager")          # Auto-load package manager
+ ├─ logos_core_get_loaded_modules()                    # Log loaded modules
  ├─ LogosAPI("core", nullptr)                          # Create SDK instance
  ├─ Window(&logosAPI)
  │   └─ QPluginLoader loads main_ui plugin
@@ -318,7 +318,7 @@ main()
  │               │   ├─ initializeSections()           # Dashboard, Modules, Settings + app sections
  │               │   ├─ m_statsTimer.start(2000)       # Poll module stats every 2s
  │               │   ├─ refreshCoreModules()
- │               │   │   └─ logos_core_refresh_plugins()
+ │               │   │   └─ logos_core_refresh_modules()
  │               │   ├─ subscribeToPackageInstallationEvents()
  │               │   │   ├─ logos.package_manager.setUserModulesDirectory(...)
  │               │   │   ├─ logos.package_manager.on("corePluginFileInstalled", ...)
@@ -339,7 +339,7 @@ User clicks "Load" in UI Apps tab (or clicks app icon in sidebar)
  └─ MainUIBackend::loadUiModule(name)
      ├─ Look up app metadata from m_uiPluginMetadata cache
      ├─ Load Logos Module dependencies (if any)
-     │   └─ logos_core_load_plugin_with_dependencies(dep) for each dependency
+     │   └─ logos_core_load_module_with_dependencies(dep) for each dependency
      ├─ Create QQuickWidget (loaded in Basecamp process, NOT via liblogos)
      ├─ Configure QML engine:
      │   ├─ Set import/plugin paths
@@ -384,12 +384,12 @@ User clicks close on tab or "Unload" in UI Apps tab
 ```
 User clicks "Load" in Logos Modules tab
  └─ MainUIBackend::loadCoreModule(name)
-     ├─ logos_core_load_plugin_with_dependencies(name)  # liblogos spawns logos_host process
+     ├─ logos_core_load_module_with_dependencies(name)  # liblogos spawns logos_host process
      └─ emit coreModulesChanged()
 
 User clicks "Unload" in Logos Modules tab
  └─ MainUIBackend::unloadCoreModule(name)
-     ├─ logos_core_unload_plugin(name)  # liblogos terminates logos_host process
+     ├─ logos_core_unload_module(name)  # liblogos terminates logos_host process
      └─ emit coreModulesChanged()
 ```
 
@@ -404,7 +404,7 @@ User clicks "Install LGX Package" → selects .lgx file
          ├─ Event emitted: "corePluginFileInstalled" or "uiPluginFileInstalled"
          │   └─ MainUIBackend event handler:
          │       ├─ refreshCoreModules()
-         │       │   └─ logos_core_refresh_plugins()  # Re-scan directories
+         │       │   └─ logos_core_refresh_modules()  # Re-scan directories
          │       └─ fetchUiPluginMetadata()           # Refresh UI plugin list
          └─ Async callback:
              ├─ refreshCoreModules()
@@ -442,7 +442,7 @@ Logos Modules and UI Apps are discovered from separate directories, reflecting t
 
 ### Logos Module Directories (managed by liblogos)
 
-Configured via `logos_core_set_plugins_dir()` and `logos_core_add_plugins_dir()` in `main.cpp`. liblogos scans these directories for `.so`/`.dylib`/`.dll` files and extracts module metadata.
+Configured via `logos_core_set_modules_dir()` and `logos_core_add_modules_dir()` in `main.cpp`. liblogos scans these directories for `.so`/`.dylib`/`.dll` files and extracts module metadata.
 
 **Embedded (read-only):**
 - `<app-dir>/../modules/`

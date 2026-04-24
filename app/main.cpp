@@ -31,25 +31,28 @@
 
 // Replace CoreManager with direct C API functions
 extern "C" {
-    void logos_core_set_plugins_dir(const char* plugins_dir);
-    void logos_core_add_plugins_dir(const char* plugins_dir);
+    void logos_core_set_modules_dir(const char* modules_dir);
+    void logos_core_add_modules_dir(const char* modules_dir);
     void logos_core_set_persistence_base_path(const char* path);
     void logos_core_start();
     void logos_core_cleanup();
-    char** logos_core_get_loaded_plugins();
-    int logos_core_load_plugin(const char* plugin_name);
-    char* logos_core_process_plugin(const char* plugin_path);
+    char** logos_core_get_loaded_modules();
+    int logos_core_load_module(const char* module_name);
+    char* logos_core_process_module(const char* module_path);
     char* logos_core_get_module_stats();
 }
 
-// Helper function to convert C-style array to QStringList
-QStringList convertPluginsToStringList(char** plugins) {
+// Drain a NULL-terminated char** from liblogos: copy each entry into the
+// returned QStringList and release the heap memory. liblogos allocates with
+// new char[] / new char*[], so delete[] is the correct deallocator.
+QStringList drainModuleNameArray(char** modules) {
     QStringList result;
-    if (plugins) {
-        for (int i = 0; plugins[i] != nullptr; i++) {
-            result.append(plugins[i]);
-        }
+    if (!modules) return result;
+    for (char** p = modules; *p != nullptr; ++p) {
+        result.append(QString::fromUtf8(*p));
+        delete[] *p;
     }
+    delete[] modules;
     return result;
 }
 
@@ -117,11 +120,11 @@ int main(int argc, char *argv[])
     // Set up module directories for logos core.
     // 1. Embedded modules directory (pre-installed at build time, read-only)
     QString embeddedModulesDir = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules");
-    logos_core_set_plugins_dir(embeddedModulesDir.toUtf8().constData());
+    logos_core_set_modules_dir(embeddedModulesDir.toUtf8().constData());
 
     // 2. User-writable modules directory (for runtime installs via the package store)
     QString userModulesDir = LogosBasecampPaths::modulesDirectory();
-    logos_core_add_plugins_dir(userModulesDir.toUtf8().constData());
+    logos_core_add_modules_dir(userModulesDir.toUtf8().constData());
 
     // Set persistence base path for core modules
     logos_core_set_persistence_base_path(
@@ -131,26 +134,25 @@ int main(int argc, char *argv[])
     logos_core_start();
     std::cout << "Logos Core started successfully!" << std::endl;
 
-    bool loaded = logos_core_load_plugin("package_manager");
+    bool loaded = logos_core_load_module("package_manager");
 
     if (loaded) {
-        qInfo() << "package_manager plugin loaded by default.";
+        qInfo() << "package_manager module loaded by default.";
     } else {
-        qWarning() << "Failed to load package_manager plugin by default.";
+        qWarning() << "Failed to load package_manager module by default.";
     }
 
-    // Print loaded plugins initially
-    char** loadedPlugins = logos_core_get_loaded_plugins();
-    QStringList plugins = convertPluginsToStringList(loadedPlugins);
+    // Log the initial loaded-module list.
+    const QStringList modules = drainModuleNameArray(logos_core_get_loaded_modules());
 
-    if (plugins.isEmpty()) {
-        qInfo() << "No plugins loaded.";
+    if (modules.isEmpty()) {
+        qInfo() << "No modules loaded.";
     } else {
-        qInfo() << "Currently loaded plugins:";
-        foreach (const QString &plugin, plugins) {
-            qInfo() << "  -" << plugin;
+        qInfo() << "Currently loaded modules:";
+        for (const QString& name : modules) {
+            qInfo() << "  -" << name;
         }
-        qInfo() << "Total plugins:" << plugins.size();
+        qInfo() << "Total modules:" << modules.size();
     }
 
     LogosAPI logosAPI("core", nullptr);

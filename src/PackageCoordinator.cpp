@@ -348,10 +348,10 @@ void PackageCoordinator::confirmUninstallCascade(const QString& moduleName)
     m_pendingInstallPath.clear();
 
     // Snapshot the loaded-dependents list BEFORE the cascade — once
-    // unloadPluginWithDependents returns, the target is off the loaded-
-    // plugins list and the filter would come up empty. UI-plugin dependents
+    // unloadModuleWithDependents returns, the target is off the loaded-
+    // modules list and the filter would come up empty. UI-plugin dependents
     // need teardown in-process because the core cascade only kills core
-    // plugins (QProcess termination). Without this pass, e.g. accounts_ui
+    // modules (QProcess termination). Without this pass, e.g. accounts_ui
     // stays wired to a now-dead accounts_module.
     QStringList loadedDeps;
     if (m_uiPluginManager) {
@@ -360,19 +360,19 @@ void PackageCoordinator::confirmUninstallCascade(const QString& moduleName)
     }
 
     const QStringList loadedCore = m_coreModuleManager
-        ? m_coreModuleManager->loadedPlugins()
+        ? m_coreModuleManager->loadedModules()
         : QStringList{};
 
     // Core cascade: terminate the target process (if it's a loaded core
-    // plugin) plus any loaded core-plugin dependents. Local-mode / pure-UI
-    // targets aren't in loadedPlugins and the function will return
+    // module) plus any loaded core-module dependents. Local-mode / pure-UI
+    // targets aren't in loadedModules and the function will return
     // non-zero; we tolerate that and proceed to the UI teardown and module-
     // side confirm call — the user-visible action (deleting the package /
     // swapping versions) is what we must preserve.
     if (loadedCore.contains(moduleName) || !loadedDeps.isEmpty()) {
         qDebug() << "Cascade-unloading before uninstall:" << moduleName;
         bool ok = m_coreModuleManager
-                ? m_coreModuleManager->unloadPluginWithDependents(moduleName)
+                ? m_coreModuleManager->unloadModuleWithDependents(moduleName)
                 : false;
         if (!ok) {
             qWarning() << "Cascade unload failed during uninstall of" << moduleName
