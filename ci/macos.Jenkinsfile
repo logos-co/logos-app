@@ -50,9 +50,6 @@ pipeline {
     }
 
     stage('Sign & Notarize') {
-      when {
-        expression { utils.isReleaseBuild() }
-      }
       steps {
         script {
           logos.codesignApp(
